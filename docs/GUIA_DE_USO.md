@@ -1,8 +1,8 @@
 # Guía de uso — App del taller
 
-> **Demo online:** https://marcmuu.github.io/App-taller-demo/
-> **Guía visual con vídeo:** https://marcmuu.github.io/App-taller-demo/guia/
-> **Cliente y taller a la vez (ordenador):** https://marcmuu.github.io/App-taller-demo/demo/
+> **Demo online:** https://marcmuu.github.io/App-taller/
+> **Guía visual con vídeo:** https://marcmuu.github.io/App-taller/guia/
+> **Cliente y taller a la vez (ordenador):** https://marcmuu.github.io/App-taller/demo/
 
 ---
 

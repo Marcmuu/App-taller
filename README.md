@@ -48,9 +48,9 @@ El trabajador debe poder actualizar el estado en menos de 5 segundos.
 
 ## Demo online
 
-- App: https://marcmuu.github.io/App-taller-demo/
-- Guía visual con vídeo: https://marcmuu.github.io/App-taller-demo/guia/
-- Cliente y taller a la vez (ordenador): https://marcmuu.github.io/App-taller-demo/demo/
+- App: https://marcmuu.github.io/App-taller/
+- Guía visual con vídeo: https://marcmuu.github.io/App-taller/guia/
+- Cliente y taller a la vez (ordenador): https://marcmuu.github.io/App-taller/demo/
 - Manual de uso completo: [docs/GUIA_DE_USO.md](docs/GUIA_DE_USO.md)
 
 ## Estado actual
@@ -171,10 +171,10 @@ SUPABASE_SERVICE_ROLE_KEY=   # solo en servidor, nunca en el navegador
 La demo se publica gratis como web estática (sin servidor, sin Vercel ni Supabase):
 
 ```bash
-npm run build:pages   # genera ./out con basePath /App-taller-demo
+npm run build:pages   # genera ./out con basePath /App-taller
 ```
 
-Después se sube el contenido de `out/` a la rama `gh-pages` del repositorio **público** [Marcmuu/App-taller-demo](https://github.com/Marcmuu/App-taller-demo) (solo contiene la web compilada; este repo con el código sigue privado). En ese repo: Settings → Pages → *Deploy from a branch* → `gh-pages` / root.
+Después se sube el contenido de `out/` a la rama `gh-pages` de este repositorio (GitHub → Settings → Pages → *Deploy from a branch* → `gh-pages` / root).
 
 - `scripts/build-pages.mjs` activa `output: "export"` (ver `next.config.ts`) y `scripts/fix-static-export.mjs` corrige los nombres de los payloads de prefetch de Next 16 y añade `.nojekyll`.
 - Para que la exportación estática funcione, las pantallas con id usan parámetros de consulta (`/app/repair?id=…`) en vez de segmentos dinámicos. Todas esas URLs están en `src/lib/routes.ts`; al pasar a Vercel se puede volver a `/app/repairs/[id]`.
