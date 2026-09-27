@@ -36,7 +36,7 @@ export function DemoSwitcher({ className }: { className?: string }) {
 
   const switchTo = (id: string, isStaff: boolean) => {
     setSessionUserId(id);
-    router.push(isStaff ? "/taller" : "/app");
+    router.replace(isStaff ? "/taller" : "/app");
   };
 
   return (

@@ -1,8 +1,9 @@
-import { addDays, addMinutes, format, isAfter, startOfDay } from "date-fns";
+import { addDays, addMinutes, format, isBefore, startOfDay } from "date-fns";
 import type {
   Appointment,
   DrivableStatus,
   WorkshopAvailability,
+  WorkshopClosure,
 } from "@/types/database";
 
 export const ISSUE_CATEGORIES = [
@@ -32,52 +33,46 @@ export const SINCE_OPTIONS = [
   "Hace meses",
 ] as const;
 
-export interface DaySlots {
-  date: Date;
-  slots: Date[];
+// ---------------------------------------------------------------------------
+// Reservas: capacidad por franja
+// ---------------------------------------------------------------------------
+
+/** Antelación mínima para reservar (no se ofrecen huecos inminentes). */
+export const BOOKING_LEAD_MINUTES = 60;
+/** Días hacia delante que puede reservar el cliente. */
+export const BOOKING_WINDOW_DAYS = 21;
+
+/** Una cita ocupa plaza salvo que esté cancelada. */
+export function occupiesSlot(appointment: Pick<Appointment, "status">): boolean {
+  return appointment.status !== "cancelled";
 }
 
-/**
- * Genera los próximos días con huecos libres a partir de la disponibilidad
- * semanal del taller, descontando las citas ya pedidas o confirmadas.
- */
-export function getAvailableDays(
-  availability: WorkshopAvailability[],
-  appointments: Appointment[],
-  options: { now?: Date; days?: number; maxLookahead?: number } = {},
-): DaySlots[] {
-  const now = options.now ?? new Date();
-  const wanted = options.days ?? 6;
-  const maxLookahead = options.maxLookahead ?? 21;
+export interface SlotInfo {
+  start: Date;
+  end: Date;
+  capacity: number;
+  booked: number;
+  available: number;
+  /** Ya no se puede reservar (pasado o dentro de la antelación mínima). */
+  past: boolean;
+}
 
-  const taken = new Set(
-    appointments
-      .filter((a) => a.status === "requested" || a.status === "confirmed")
-      .map((a) => new Date(a.scheduled_at).getTime()),
-  );
+export type DayState = "open" | "full" | "closed" | "past";
 
-  const result: DaySlots[] = [];
-  for (let offset = 0; offset < maxLookahead && result.length < wanted; offset++) {
-    const day = startOfDay(addDays(now, offset));
-    const rules = availability.filter((r) => r.is_active && r.weekday === day.getDay());
-    const slots: Date[] = [];
+export interface DayInfo {
+  date: Date;
+  /** "yyyy-MM-dd" */
+  key: string;
+  state: DayState;
+  /** Motivo si está cerrado (festivo…). */
+  reason: string | null;
+  slots: SlotInfo[];
+  /** Plazas libres reservables en el día. */
+  free: number;
+}
 
-    for (const rule of rules) {
-      let cursor = atTime(day, rule.start_time);
-      const end = atTime(day, rule.end_time);
-      while (addMinutes(cursor, rule.slot_minutes) <= end) {
-        // Margen de 1 h para no ofrecer huecos inminentes.
-        if (isAfter(cursor, addMinutes(now, 60)) && !taken.has(cursor.getTime())) {
-          slots.push(cursor);
-        }
-        cursor = addMinutes(cursor, rule.slot_minutes);
-      }
-    }
-
-    slots.sort((a, b) => a.getTime() - b.getTime());
-    if (slots.length > 0) result.push({ date: day, slots });
-  }
-  return result;
+export function dayKey(date: Date): string {
+  return format(date, "yyyy-MM-dd");
 }
 
 function atTime(day: Date, hhmm: string): Date {
@@ -85,6 +80,85 @@ function atTime(day: Date, hhmm: string): Date {
   const d = new Date(day);
   d.setHours(h, m, 0, 0);
   return d;
+}
+
+/**
+ * Calendario de reservas: para cada día, sus franjas con capacidad, plazas
+ * ocupadas y libres. Lo usan el cliente (elegir hueco), el taller (agenda) y
+ * la validación al reservar.
+ */
+export function getBookingCalendar(
+  availability: WorkshopAvailability[],
+  closures: WorkshopClosure[],
+  appointments: Appointment[],
+  options: { now?: Date; from?: Date; days?: number; leadMinutes?: number } = {},
+): DayInfo[] {
+  const now = options.now ?? new Date();
+  const from = startOfDay(options.from ?? now);
+  const days = options.days ?? BOOKING_WINDOW_DAYS;
+  const bookable = addMinutes(now, options.leadMinutes ?? BOOKING_LEAD_MINUTES);
+
+  const booked = appointments.filter(occupiesSlot).map((a) => new Date(a.scheduled_at).getTime());
+
+  const result: DayInfo[] = [];
+  for (let offset = 0; offset < days; offset++) {
+    const date = addDays(from, offset);
+    const key = dayKey(date);
+    const closure = closures.find((c) => c.date === key);
+    const rules = availability
+      .filter((r) => r.is_active && r.weekday === date.getDay())
+      .sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+    if (closure || rules.length === 0) {
+      result.push({ date, key, state: "closed", reason: closure ? closure.reason ?? "Cerrado" : "Cerrado", slots: [], free: 0 });
+      continue;
+    }
+
+    const slots: SlotInfo[] = [];
+    for (const rule of rules) {
+      let cursor = atTime(date, rule.start_time);
+      const end = atTime(date, rule.end_time);
+      while (addMinutes(cursor, rule.slot_minutes) <= end) {
+        const slotEnd = addMinutes(cursor, rule.slot_minutes);
+        const count = booked.filter((t) => t >= cursor.getTime() && t < slotEnd.getTime()).length;
+        slots.push({
+          start: cursor,
+          end: slotEnd,
+          capacity: rule.capacity,
+          booked: count,
+          available: Math.max(0, rule.capacity - count),
+          past: isBefore(cursor, bookable),
+        });
+        cursor = slotEnd;
+      }
+    }
+
+    const future = slots.filter((s) => !s.past);
+    const free = future.reduce((sum, s) => sum + s.available, 0);
+    const state: DayState = future.length === 0 ? "past" : free === 0 ? "full" : "open";
+    result.push({ date, key, state, reason: null, slots, free });
+  }
+  return result;
+}
+
+export type SlotCheck = { ok: true; slot: SlotInfo } | { ok: false; reason: string };
+
+/** Comprueba en el momento de reservar que la hora sigue libre. */
+export function checkSlotBookable(
+  availability: WorkshopAvailability[],
+  closures: WorkshopClosure[],
+  appointments: Appointment[],
+  scheduledAt: string,
+  now: Date = new Date(),
+): SlotCheck {
+  const when = new Date(scheduledAt);
+  const [day] = getBookingCalendar(availability, closures, appointments, { now, from: when, days: 1 });
+  if (!day || day.state === "closed") return { ok: false, reason: "El taller no abre ese día. Elige otro, por favor." };
+  const slot = day.slots.find((s) => s.start.getTime() === when.getTime());
+  if (!slot) return { ok: false, reason: "Esa hora no está disponible. Elige otra, por favor." };
+  if (slot.past) return { ok: false, reason: "Esa hora ya ha pasado. Elige otra, por favor." };
+  if (slot.available <= 0) return { ok: false, reason: "Esa hora acaba de completarse. Elige otra, por favor." };
+  return { ok: true, slot };
 }
 
 export function slotKey(date: Date): string {

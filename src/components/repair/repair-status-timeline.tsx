@@ -13,9 +13,12 @@ import { TONE_CLASSES } from "./status-tone";
 export function RepairStatusTimeline({
   status,
   history,
+  current,
 }: {
   status: RepairStatus;
   history: RepairStatusHistory[];
+  /** Texto del paso actual si difiere del genérico (p. ej. presupuesto rechazado). */
+  current?: { label: string; description: string };
 }) {
   const currentIndex = status === "closed" ? CUSTOMER_TIMELINE_STEPS.length : statusIndex(status);
   const tone = TONE_CLASSES[REPAIR_STATUS_META[status].tone];
@@ -26,7 +29,11 @@ export function RepairStatusTimeline({
   return (
     <ol className="relative">
       {CUSTOMER_TIMELINE_STEPS.map((step, i) => {
-        const state = i < currentIndex ? "done" : i === currentIndex ? "current" : "upcoming";
+        // Un paso anterior solo cuenta como hecho si consta en el historial
+        // (p. ej. al devolver un coche sin reparar, la reparación se salta).
+        const reached = history.some((h) => h.to_status === step);
+        const state =
+          i < currentIndex ? (reached ? "done" : "skipped") : i === currentIndex ? "current" : "upcoming";
         const at = reachedAt(step);
         const isLast = i === CUSTOMER_TIMELINE_STEPS.length - 1;
         return (
@@ -35,7 +42,7 @@ export function RepairStatusTimeline({
               <span
                 className={cn(
                   "absolute left-3.75 top-8 h-[calc(100%-2rem)] w-0.5",
-                  i < currentIndex ? "bg-primary" : "bg-foreground/10",
+                  i < currentIndex && reached ? "bg-primary" : "bg-foreground/10",
                 )}
                 aria-hidden
               />
@@ -46,6 +53,7 @@ export function RepairStatusTimeline({
                 state === "done" && "bg-primary text-primary-foreground",
                 state === "current" && cn(tone.solid, "ring-4 ring-foreground/10"),
                 state === "upcoming" && "border-2 border-foreground/15 bg-background",
+                state === "skipped" && "border-2 border-dashed border-foreground/15 bg-muted",
               )}
             >
               {state === "done" && <Check className="size-4" aria-hidden />}
@@ -58,15 +66,17 @@ export function RepairStatusTimeline({
                   state === "current" && "text-lg font-semibold",
                   state === "done" && "font-medium",
                   state === "upcoming" && "text-muted-foreground",
+                  state === "skipped" && "text-muted-foreground line-through",
                 )}
               >
-                {REPAIR_STATUS_META[step].label}
+                {state === "current" && current ? current.label : REPAIR_STATUS_META[step].label}
               </p>
-              {at && state !== "upcoming" && (
+              {state === "skipped" && <p className="mt-0.5 text-xs text-muted-foreground">No realizado</p>}
+              {at && (state === "done" || state === "current") && (
                 <p className="mt-0.5 text-xs text-muted-foreground">{formatDateTime(at)}</p>
               )}
               {state === "current" && (
-                <p className="mt-1 text-sm text-muted-foreground">{REPAIR_STATUS_META[step].customerDescription}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{current?.description ?? REPAIR_STATUS_META[step].customerDescription}</p>
               )}
             </div>
           </li>

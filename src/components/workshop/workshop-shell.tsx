@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, CarFront, LogOut, MessagesSquare } from "lucide-react";
+import { Bell, CalendarDays, CarFront, LogOut, MessagesSquare, Settings2 } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import {
   DropdownMenu,
@@ -47,7 +47,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 
   const nav = [
     { href: "/taller", label: "Vehículos", icon: CarFront, active: pathname === "/taller" || pathname.startsWith("/taller/vehicle") || pathname.startsWith("/taller/estimate"), badge: 0 },
+    { href: "/taller/calendar", label: "Calendario", icon: CalendarDays, active: pathname.startsWith("/taller/calendar"), badge: 0 },
     { href: "/taller/communications", label: "Comunicaciones", icon: MessagesSquare, active: pathname.startsWith("/taller/communications"), badge: unreadMessages },
+    { href: "/taller/settings", label: "Horario", icon: Settings2, active: pathname.startsWith("/taller/settings"), badge: 0 },
   ];
 
   return (
@@ -56,7 +58,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6">
           <Link href="/taller" className="min-w-0 shrink">
-            <Logo label={workshop?.name ?? "Taller"} className="text-sm sm:text-base" />
+            <Logo label={workshop?.name ?? "Taller"} className="text-sm sm:text-base" labelClassName="hidden sm:inline" />
           </Link>
           <nav className="ml-2 flex items-center gap-1" aria-label="Secciones">
             {nav.map(({ href, label, icon: Icon, active, badge }) => (
@@ -70,7 +72,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                 )}
               >
                 <Icon className="size-4" aria-hidden />
-                <span className="hidden sm:inline">{label}</span>
+                <span className="hidden md:inline">{label}</span>
                 {badge > 0 && (
                   <span className="grid min-w-5 place-items-center rounded-full bg-destructive px-1.5 text-[11px] font-semibold leading-5 text-white">
                     {badge}

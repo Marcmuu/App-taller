@@ -10,7 +10,7 @@ import { EstimateSummary } from "@/components/estimate/estimate-summary";
 import { getOrCreateDraftEstimate } from "@/lib/data/actions";
 import type { RepairView } from "@/lib/data/queries";
 import { ESTIMATE_STATUS_META } from "@/lib/domain/estimate";
-import { formatDateTime } from "@/lib/format";
+import { formatWhen } from "@/lib/format";
 import type { Estimate, EstimateItem } from "@/types/database";
 import { routes } from "@/lib/routes";
 
@@ -41,9 +41,9 @@ export function EstimateReadOnly({
   };
 
   const banner = {
-    sent: { icon: <Clock className="size-5" aria-hidden />, cls: "bg-muted text-foreground ring-border", text: `Enviado ${estimate.sent_at ? formatDateTime(estimate.sent_at) : ""}. Esperando respuesta del cliente.` },
-    accepted: { icon: <CircleCheck className="size-5" aria-hidden />, cls: "bg-green-50 text-green-900 ring-green-200", text: `Aceptado por el cliente ${estimate.accepted_at ? formatDateTime(estimate.accepted_at) : ""} (versión ${estimate.version}).` },
-    rejected: { icon: <CircleX className="size-5" aria-hidden />, cls: "bg-red-50 text-red-900 ring-red-200", text: `Rechazado por el cliente ${estimate.rejected_at ? formatDateTime(estimate.rejected_at) : ""}. Revisa los mensajes y, si procede, envía una nueva versión.` },
+    sent: { icon: <Clock className="size-5" aria-hidden />, cls: "bg-muted text-foreground ring-border", text: `Enviado ${estimate.sent_at ? formatWhen(estimate.sent_at) : ""}. Esperando respuesta del cliente.` },
+    accepted: { icon: <CircleCheck className="size-5" aria-hidden />, cls: "bg-green-50 text-green-900 ring-green-200", text: `Aceptado por el cliente ${estimate.accepted_at ? formatWhen(estimate.accepted_at) : ""} (versión ${estimate.version}).` },
+    rejected: { icon: <CircleX className="size-5" aria-hidden />, cls: "bg-red-50 text-red-900 ring-red-200", text: `Rechazado por el cliente ${estimate.rejected_at ? formatWhen(estimate.rejected_at) : ""}. Revisa los mensajes y, si procede, envía una nueva versión.` },
     question: { icon: <CircleHelp className="size-5" aria-hidden />, cls: "bg-amber-50 text-amber-900 ring-amber-200", text: "El cliente tiene una consulta. Respóndele en la conversación o envía una nueva versión." },
     draft: null,
   }[estimate.status];

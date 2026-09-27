@@ -1,15 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarPlus, CarFront, Clock, History } from "lucide-react";
+import { CalendarPlus, CarFront, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ActiveRepairCard } from "@/components/customer/active-repair-card";
+import { PendingRequest } from "@/components/customer/pending-request";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/repair/status-badge";
 import { useData, useRequiredProfile } from "@/lib/data/hooks";
 import { getCustomerHome } from "@/lib/data/queries";
-import { issueCategoryLabel } from "@/lib/domain/appointments";
-import { formatDateTime, formatDayLabel, vehicleName } from "@/lib/format";
+import { formatDayLabel, vehicleName } from "@/lib/format";
 import { routes } from "@/lib/routes";
 
 export default function CustomerHomePage() {
@@ -47,19 +47,7 @@ export default function CustomerHomePage() {
             <section className="space-y-2">
               <h2 className="text-sm font-medium text-muted-foreground">Solicitudes enviadas</h2>
               {home.pendingRequests.map(({ appointment, vehicle }) => (
-                <div key={appointment.id} className="flex items-center gap-3 rounded-2xl border bg-card p-4">
-                  <span className="grid size-10 place-items-center rounded-full bg-amber-100 text-amber-700">
-                    <Clock className="size-5" aria-hidden />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">
-                      {vehicle ? vehicleName(vehicle) : "Vehículo"} · {issueCategoryLabel(appointment.issue_category)}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatDateTime(appointment.scheduled_at)} · Pendiente de confirmar
-                    </p>
-                  </div>
-                </div>
+                <PendingRequest key={appointment.id} appointment={appointment} vehicle={vehicle} />
               ))}
             </section>
           )}
@@ -84,14 +72,18 @@ export default function CustomerHomePage() {
                 <History className="size-4" aria-hidden /> Historial
               </h2>
               <ul className="divide-y rounded-2xl border bg-card">
-                {home.pastRepairs.map(({ repair, vehicle }) => (
+                {home.pastRepairs.map(({ repair, vehicle, appointment }) => (
                   <li key={repair.id}>
                     <Link href={routes.customerRepair(repair.id)} className="flex items-center justify-between gap-3 p-4 hover:bg-muted/40">
                       <div className="min-w-0">
                         <p className="truncate font-medium">{vehicleName(vehicle)}</p>
                         <p className="text-sm text-muted-foreground">{formatDayLabel(repair.updated_at)}</p>
                       </div>
-                      <StatusBadge status={repair.current_status} />
+                      {appointment?.status === "cancelled" ? (
+                        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">Anulada</span>
+                      ) : (
+                        <StatusBadge status={repair.current_status} />
+                      )}
                     </Link>
                   </li>
                 ))}

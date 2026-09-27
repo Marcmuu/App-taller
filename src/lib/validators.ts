@@ -12,6 +12,17 @@ export const loginSchema = z.object({
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
+export const signupSchema = z.object({
+  full_name: z.string().trim().min(3, "Escribe tu nombre y apellido"),
+  phone: z
+    .string()
+    .trim()
+    .regex(/^\+?[\d\s]{9,15}$/, "Escribe un teléfono válido"),
+  email: z.email("Escribe un email válido"),
+  password: z.string().min(8, "Mínimo 8 caracteres"),
+});
+export type SignupInput = z.infer<typeof signupSchema>;
+
 const currentYear = new Date().getFullYear();
 
 export const vehicleSchema = z.object({
@@ -57,6 +68,8 @@ export const estimateItemSchema = z.object({
 export const estimateFormSchema = z.object({
   items: z.array(estimateItemSchema).min(1, "Añade al menos una línea"),
   tax_rate: z.number("IVA").min(0).max(100),
+  /** Fecha orientativa de entrega (ISO) o null si no se indica. */
+  estimated_ready_at: z.string().nullable(),
 });
 export type EstimateFormInput = z.infer<typeof estimateFormSchema>;
 

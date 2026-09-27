@@ -8,6 +8,7 @@ import {
   CircleCheck,
   CircleHelp,
   CircleX,
+  Clock,
   Loader2,
   MessageCircleQuestion,
   PhoneCall,
@@ -39,7 +40,8 @@ import { EstimateSummary } from "@/components/estimate/estimate-summary";
 import { respondToEstimate, type EstimateResponse } from "@/lib/data/actions";
 import { useData, useRequiredProfile } from "@/lib/data/hooks";
 import { getEstimateItems, getLatestEstimate, getRepairView } from "@/lib/data/queries";
-import { formatCurrency, formatDateTime, vehicleName } from "@/lib/format";
+import { formatCurrency, formatEstimate, formatWhen, vehicleName } from "@/lib/format";
+import { canCustomerAccept, canCustomerRejectOrAsk } from "@/lib/domain/estimate";
 import { routes } from "@/lib/routes";
 
 export default function CustomerEstimatePage() {
@@ -74,6 +76,13 @@ export default function CustomerEstimatePage() {
 
   const { estimate, view, items, newerVersion } = data;
   const repairHref = routes.customerRepair(view.repair.id);
+  const ctx = {
+    status: estimate.status,
+    isLatest: !newerVersion,
+    repairAwaitingEstimate: view.repair.current_status === "estimate_pending",
+  };
+  const canAccept = canCustomerAccept(ctx);
+  const canRejectOrAsk = canCustomerRejectOrAsk(ctx);
 
   const respond = async (response: EstimateResponse, message?: string) => {
     setBusy(true);
@@ -102,8 +111,18 @@ export default function CustomerEstimatePage() {
         <h1 className="text-2xl font-semibold tracking-tight">
           Presupuesto{estimate.version > 1 && ` (versión ${estimate.version})`}
         </h1>
-        {estimate.sent_at && <p className="text-sm text-muted-foreground">Recibido {formatDateTime(estimate.sent_at)}</p>}
+        {estimate.sent_at && <p className="text-sm text-muted-foreground">Recibido {formatWhen(estimate.sent_at)}</p>}
       </div>
+
+      {estimate.estimated_ready_at && estimate.status !== "rejected" && (
+        <div className="flex gap-3 rounded-2xl border bg-card p-4 text-sm">
+          <Clock className="size-5 shrink-0 text-primary" aria-hidden />
+          <div>
+            <p className="font-medium">Listo aproximadamente: {formatEstimate(estimate.estimated_ready_at)}</p>
+            <p className="text-muted-foreground">Si aceptas ahora. Es una fecha orientativa.</p>
+          </div>
+        </div>
+      )}
 
       {newerVersion && (
         <Link
@@ -116,12 +135,13 @@ export default function CustomerEstimatePage() {
 
       {estimate.status === "accepted" && estimate.accepted_at && (
         <StatusBanner tone="green" icon={<CircleCheck className="size-5" aria-hidden />}>
-          Aceptaste este presupuesto el {formatDateTime(estimate.accepted_at)}. El taller te avisará cuando empiece la reparación.
+          Aceptaste este presupuesto {formatWhen(estimate.accepted_at)}. El taller te avisará cuando empiece la reparación.
         </StatusBanner>
       )}
       {estimate.status === "rejected" && (
         <StatusBanner tone="red" icon={<CircleX className="size-5" aria-hidden />}>
-          Has rechazado este presupuesto. El taller se pondrá en contacto contigo.
+          Has rechazado este presupuesto{estimate.rejected_at ? ` ${formatWhen(estimate.rejected_at)}` : ""}.
+          {canAccept ? " Si cambias de opinión, todavía puedes aceptarlo." : " El taller se pondrá en contacto contigo."}
         </StatusBanner>
       )}
       {estimate.status === "question" && (
@@ -139,14 +159,24 @@ export default function CustomerEstimatePage() {
         total={estimate.total}
       />
 
-      {estimate.status === "sent" && !newerVersion && (
+      {(canAccept || canRejectOrAsk) && (
         <div className="sticky bottom-0 -mx-4 grid gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur pb-safe">
-          <Button size="xl" className="h-14 w-full bg-green-600 text-white hover:bg-green-600/90" onClick={() => setConfirmAccept(true)}>
-            <CircleCheck aria-hidden /> ACEPTAR PRESUPUESTO
-          </Button>
-          <Button size="xl" variant="outline" className="w-full" onClick={() => setSheetOpen(true)}>
-            RECHAZAR / CONSULTAR
-          </Button>
+          {canAccept && (
+            <Button size="xl" className="h-14 w-full bg-green-600 text-white hover:bg-green-600/90" onClick={() => setConfirmAccept(true)}>
+              <CircleCheck aria-hidden />
+              {estimate.status === "rejected" ? "HE CAMBIADO DE OPINIÓN: ACEPTAR" : "ACEPTAR PRESUPUESTO"}
+            </Button>
+          )}
+          {canRejectOrAsk && (
+            <Button size="xl" variant="outline" className="w-full" onClick={() => setSheetOpen(true)}>
+              RECHAZAR / CONSULTAR
+            </Button>
+          )}
+          {estimate.status === "rejected" && (
+            <Button asChild size="lg" variant="ghost" className="w-full">
+              <Link href={routes.customerMessages(view.repair.id)}>Escribir al taller</Link>
+            </Button>
+          )}
         </div>
       )}
 

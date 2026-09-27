@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { BackHeader } from "@/components/customer/back-header";
 import { useData, useRequiredProfile } from "@/lib/data/hooks";
 import { getDefaultWorkshop, getEstimateItems, getRepairView } from "@/lib/data/queries";
-import { formatCurrency, formatDateTime, vehicleName } from "@/lib/format";
+import { formatCurrency, formatWhen, vehicleName } from "@/lib/format";
 import { routes } from "@/lib/routes";
 
 const WEEKDAYS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
@@ -71,7 +71,7 @@ export default function PickupPage() {
         </h1>
         <p className="text-white/85">
           {isReady ? "Ya puedes pasar a recogerlo." : "Te avisaremos cuando puedas pasar a recogerlo."}
-          {readyAt && isReady && <span className="block text-sm">Listo desde {formatDateTime(readyAt)}</span>}
+          {readyAt && isReady && <span className="block text-sm">Listo desde {formatWhen(readyAt)}</span>}
         </p>
       </section>
 
@@ -93,6 +93,17 @@ export default function PickupPage() {
           }
         />
       </section>
+
+      {!estimate && isReady && (
+        <section className="rounded-2xl border bg-card p-5 text-sm">
+          <h2 className="mb-1 flex items-center gap-2 font-semibold">
+            <Wrench className="size-4" aria-hidden /> Sin reparación
+          </h2>
+          <p className="text-muted-foreground">
+            No se ha realizado la reparación. Si tienes cualquier duda sobre importes (por ejemplo, el diagnóstico), consúltalo con el taller.
+          </p>
+        </section>
+      )}
 
       {estimate && (
         <section className="rounded-2xl border bg-card p-5">

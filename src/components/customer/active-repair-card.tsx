@@ -1,21 +1,23 @@
 import Link from "next/link";
-import { CalendarClock, ChevronRight, MessageCircle } from "lucide-react";
+import { CalendarClock, ChevronRight, Clock, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TONE_CLASSES } from "@/components/repair/status-tone";
 import {
   CUSTOMER_TIMELINE_STEPS,
+  getCustomerStatusCopy,
   REPAIR_STATUS_META,
   statusIndex,
 } from "@/lib/domain/repair-status";
-import { getCustomerRepairAction } from "@/lib/domain/customer-actions";
+import { getCustomerRepairAction, shouldShowEstimatedReady } from "@/lib/domain/customer-actions";
 import type { RepairView } from "@/lib/data/queries";
-import { formatDateTime, formatRelative, vehicleName } from "@/lib/format";
+import { formatDateTime, formatEstimate, formatRelative, vehicleName } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { routes } from "@/lib/routes";
 
 export function ActiveRepairCard({ view }: { view: RepairView }) {
   const { repair, vehicle, appointment } = view;
   const meta = REPAIR_STATUS_META[repair.current_status];
+  const copy = getCustomerStatusCopy(repair.current_status, view.estimate?.status);
   const tone = TONE_CLASSES[meta.tone];
   const action = getCustomerRepairAction(view);
   const step = statusIndex(repair.current_status) + 1;
@@ -42,8 +44,8 @@ export function ActiveRepairCard({ view }: { view: RepairView }) {
               Paso {step} de {total}
             </p>
           </div>
-          <p className="mt-1.5 text-xl font-semibold leading-tight">{meta.label}</p>
-          <p className="mt-1 text-sm text-muted-foreground">{meta.customerDescription}</p>
+          <p className="mt-1.5 text-xl font-semibold leading-tight">{copy.label}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{copy.description}</p>
           <div className="mt-3 flex gap-1" aria-hidden>
             {CUSTOMER_TIMELINE_STEPS.map((s, i) => (
               <span key={s} className={cn("h-1.5 flex-1 rounded-full", i < step ? tone.dot : "bg-foreground/10")} />
@@ -58,6 +60,11 @@ export function ActiveRepairCard({ view }: { view: RepairView }) {
             </span>
           ) : (
             <span>Actualizado {formatRelative(repair.updated_at)}</span>
+          )}
+          {shouldShowEstimatedReady(view) && repair.estimated_ready_at && (
+            <span className="inline-flex items-center gap-1 font-medium text-foreground">
+              <Clock className="size-3.5" aria-hidden /> Listo aprox.: {formatEstimate(repair.estimated_ready_at)}
+            </span>
           )}
           {view.unreadMessages > 0 && (
             <span className="inline-flex items-center gap-1 font-medium text-primary">

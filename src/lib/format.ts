@@ -66,3 +66,18 @@ export function initials(name: string): string {
     .map((p) => p[0]?.toUpperCase())
     .join("");
 }
+
+/** Fecha orientativa: "Mañana, hacia las 18:00" / "jue 1 oct, hacia las 19:00". */
+export function formatEstimate(value: string | Date): string {
+  return `${formatDayLabel(value)}, hacia las ${formatTime(value)}`;
+}
+
+/** Fecha para frases: "hoy a las 10:06", "mañana a las 10:00", "el lun 5 oct a las 09:30". */
+export function formatWhen(value: string | Date): string {
+  const d = toDate(value);
+  const time = `a las ${formatTime(d)}`;
+  if (isToday(d)) return `hoy ${time}`;
+  if (isTomorrow(d)) return `mañana ${time}`;
+  if (isYesterday(d)) return `ayer ${time}`;
+  return `el ${format(d, "EEE d MMM", { locale: es })} ${time}`;
+}

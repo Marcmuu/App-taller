@@ -37,11 +37,22 @@ export function AuthGuard({
   const userId = useSessionUserId();
   const profile = useCurrentProfile();
   const allowed = profile && (area === "customer" ? profile.role === "customer" : profile.role !== "customer");
+  // Con sesión pero en la zona equivocada (p. ej. al cambiar de usuario desde
+  // el botón Demo): se le lleva a SU zona, no al login.
+  const redirectTo = !userId
+    ? area === "customer"
+      ? "/login?tipo=cliente"
+      : "/login?tipo=taller"
+    : profile
+      ? profile.role === "customer"
+        ? "/app"
+        : "/taller"
+      : "/";
 
   useEffect(() => {
-    if (userId === undefined) return;
-    if (!allowed) router.replace(area === "customer" ? "/login?tipo=cliente" : "/login?tipo=taller");
-  }, [allowed, area, router, userId]);
+    if (userId === undefined || allowed) return;
+    router.replace(redirectTo);
+  }, [allowed, redirectTo, router, userId]);
 
   if (!allowed) return <FullPageLoader />;
   return <>{children}</>;

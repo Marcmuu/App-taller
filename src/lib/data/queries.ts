@@ -17,6 +17,13 @@ import type {
   Workshop,
 } from "@/types/database";
 import type { MockState } from "@/lib/mock/types";
+import {
+  dayKey,
+  getBookingCalendar,
+  occupiesSlot,
+  type DayInfo,
+  type SlotInfo,
+} from "@/lib/domain/appointments";
 
 /**
  * Consultas de lectura. Son funciones puras sobre el estado de la BBDD, sin
@@ -296,4 +303,65 @@ export function getCommunicationTimeline(db: Database, repairId: string): Timeli
   }
 
   return entries.sort((a, b) => a.at.localeCompare(b.at));
+}
+
+// ---------------------------------------------------------------------------
+// Agenda del taller
+// ---------------------------------------------------------------------------
+
+export interface AgendaItem {
+  appointment: Appointment;
+  vehicle: Vehicle;
+  customer: Profile;
+  repair: RepairOrder | null;
+}
+
+export interface AgendaSlot extends SlotInfo {
+  items: AgendaItem[];
+}
+
+export interface AgendaDay extends Omit<DayInfo, "slots"> {
+  slots: AgendaSlot[];
+  /** Citas a horas que no encajan en el horario actual. */
+  outside: AgendaItem[];
+  total: number;
+  pending: number;
+}
+
+/** Días con sus franjas y las citas de cada una (sin canceladas). */
+export function getWorkshopAgenda(state: MockState, workshopId: string, from: Date, days: number): AgendaDay[] {
+  const { db } = state;
+  const appointments = db.appointments.filter((a) => a.workshop_id === workshopId);
+  const calendar = getBookingCalendar(
+    db.workshop_availability.filter((a) => a.workshop_id === workshopId),
+    db.workshop_closures.filter((c) => c.workshop_id === workshopId),
+    appointments,
+    { from, days, leadMinutes: 0 },
+  );
+
+  const items: AgendaItem[] = appointments.filter(occupiesSlot).flatMap((appointment) => {
+    const vehicle = db.vehicles.find((v) => v.id === appointment.vehicle_id);
+    const customer = getProfile(db, appointment.customer_id);
+    if (!vehicle || !customer) return [];
+    const repair = db.repair_orders.find((r) => r.appointment_id === appointment.id) ?? null;
+    return [{ appointment, vehicle, customer, repair }];
+  });
+
+  return calendar.map((day) => {
+    const dayItems = items
+      .filter((i) => dayKey(new Date(i.appointment.scheduled_at)) === day.key)
+      .sort((a, b) => a.appointment.scheduled_at.localeCompare(b.appointment.scheduled_at));
+    const inSlot = (i: AgendaItem, s: SlotInfo) => {
+      const t = new Date(i.appointment.scheduled_at).getTime();
+      return t >= s.start.getTime() && t < s.end.getTime();
+    };
+    const slots = day.slots.map((s) => ({ ...s, items: dayItems.filter((i) => inSlot(i, s)) }));
+    return {
+      ...day,
+      slots,
+      outside: dayItems.filter((i) => !day.slots.some((s) => inSlot(i, s))),
+      total: dayItems.length,
+      pending: dayItems.filter((i) => i.appointment.status === "requested").length,
+    };
+  });
 }

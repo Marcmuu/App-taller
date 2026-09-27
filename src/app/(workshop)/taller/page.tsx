@@ -6,19 +6,25 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { AppointmentRequestCard } from "@/components/workshop/appointment-request-card";
 import { RepairCard } from "@/components/workshop/repair-card";
 import { useData, useRequiredProfile } from "@/lib/data/hooks";
-import { getWorkshopBoard } from "@/lib/data/queries";
+import { getWorkshopBoard, type RepairView } from "@/lib/data/queries";
 import { formatLongDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { RepairStatus } from "@/types/database";
 
-const FILTERS: Array<{ key: string; label: string; statuses: RepairStatus[] | null }> = [
-  { key: "all", label: "Todos", statuses: null },
-  { key: "appointments", label: "Citas", statuses: ["appointment_confirmed"] },
-  { key: "received", label: "Recibidos", statuses: ["vehicle_received"] },
-  { key: "diagnosis", label: "Diagnóstico", statuses: ["diagnosis"] },
-  { key: "estimate", label: "Presupuesto", statuses: ["estimate_pending"] },
-  { key: "repair", label: "Reparación", statuses: ["repair_in_progress", "repair_completed"] },
-  { key: "ready", label: "Listos", statuses: ["ready_for_pickup"] },
+const isRejected = (r: RepairView) =>
+  r.repair.current_status === "estimate_pending" && r.estimate?.status === "rejected";
+const inStatus = (...statuses: RepairStatus[]) => (r: RepairView) => statuses.includes(r.repair.current_status);
+
+const FILTERS: Array<{ key: string; label: string; match: (r: RepairView) => boolean }> = [
+  { key: "all", label: "Todos", match: () => true },
+  { key: "appointments", label: "Citas", match: inStatus("appointment_confirmed") },
+  { key: "received", label: "Recibidos", match: inStatus("vehicle_received") },
+  { key: "diagnosis", label: "Diagnóstico", match: inStatus("diagnosis") },
+  // Los rechazados van aparte para que no abulten los pendientes.
+  { key: "estimate", label: "Presupuesto", match: (r) => inStatus("estimate_pending")(r) && !isRejected(r) },
+  { key: "repair", label: "Reparación", match: inStatus("repair_in_progress", "repair_completed") },
+  { key: "ready", label: "Listos", match: inStatus("ready_for_pickup") },
+  { key: "rejected", label: "Rechazados", match: isRejected },
 ];
 
 export default function WorkshopDashboardPage() {
@@ -27,11 +33,11 @@ export default function WorkshopDashboardPage() {
   const [filter, setFilter] = useState("all");
 
   const active = FILTERS.find((f) => f.key === filter) ?? FILTERS[0];
-  const count = (statuses: RepairStatus[] | null) =>
-    statuses ? board.repairs.filter((r) => statuses.includes(r.repair.current_status)).length : board.repairs.length;
-  const visible = active.statuses
-    ? board.repairs.filter((r) => active.statuses?.includes(r.repair.current_status))
-    : board.repairs;
+  const count = (match: (r: RepairView) => boolean) => board.repairs.filter(match).length;
+  // En "Todos", los rechazados se muestran al final.
+  const visible = board.repairs
+    .filter(active.match)
+    .sort((a, b) => Number(isRejected(a)) - Number(isRejected(b)));
 
   return (
     <div className="space-y-8">
@@ -59,7 +65,7 @@ export default function WorkshopDashboardPage() {
         <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           <div className="flex w-max gap-2" role="tablist" aria-label="Filtrar por estado">
             {FILTERS.map((f) => {
-              const n = count(f.statuses);
+              const n = count(f.match);
               const selected = f.key === filter;
               return (
                 <button

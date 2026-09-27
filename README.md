@@ -59,6 +59,7 @@ El trabajador debe poder actualizar el estado en menos de 5 segundos.
 | --- | --- |
 | A — Scaffold y design system | ✅ |
 | B — 15 pantallas con datos falsos | ✅ (flujo completo navegable) |
+| B+ — Calendario, capacidad por franja, festivos, fecha estimada, rechazados, registro | ✅ con 46 tests automáticos |
 | C — Supabase (migraciones, RLS, seed) | ⏳ siguiente |
 | D — Autenticación real | ⏳ |
 | E — Flujos conectados a Supabase + Realtime | ⏳ (hoy funcionan sobre la BBDD falsa) |
@@ -85,7 +86,22 @@ Otros comandos:
 npm run lint    # ESLint
 npm run build   # build de producción (Turbopack)
 npm run start   # sirve el build
+npm test        # todos los tests (lógica + app completa en Chrome)
+npm run test:unit  # solo lógica de dominio (reservas, estados, presupuestos)
+npm run test:e2e   # solo flujos de extremo a extremo
 ```
+
+## Tests
+
+Los tests usan Playwright y el **Chrome instalado** en el equipo (`channel: "chrome"` en `playwright.config.ts`). `npm test` compila la app y la arranca en el puerto 3100.
+
+| Archivo | Qué cubre |
+| --- | --- |
+| `e2e/domain.unit.spec.ts` | Capacidad por franja, días llenos/cerrados/festivos, antelación mínima, validación de horario, siguiente acción, reglas de aceptación, totales |
+| `e2e/auth.e2e.spec.ts` | Login demo y manual, cambio de usuario con «Demo», protección de rutas, registro, cierre de sesión |
+| `e2e/booking.e2e.spec.ts` | Calendario del cliente, reserva con foto en directo, capacidad configurable, dos clientes a por la última plaza, anulaciones y rechazos de cita |
+| `e2e/repairs.e2e.spec.ts` | Flujo completo con fecha estimada y deshacer, rechazados y cambio de opinión, devolver sin reparar, consultas y versiones, borradores, mensajes |
+| `e2e/schedule.e2e.spec.ts` | Agenda semanal del taller, validación de tramos, cerrar días, festivos, franjas de 1 hora |
 
 ## Cuentas demo
 
@@ -99,7 +115,12 @@ Contraseña de todas: **`demo1234`**. En la pantalla de login aparecen como boto
 | Cliente (presupuesto pendiente) | Carlos López | carlos@demo.es |
 | Cliente (en reparación + cita solicitada) | Ana García | ana@demo.es |
 | Cliente (listo para recoger) | Marta Fernández | marta@demo.es |
-| Clientes | David Romero, Lucía Navarro, Sergio Gil, Jorge Díaz | david@ / lucia@ / sergio@ / jorge@demo.es |
+| Cliente (presupuesto rechazado) | David Romero | david@demo.es |
+| Cliente (cita confirmada mañana) | Jorge Díaz | jorge@demo.es |
+| Cliente recién registrada (sin coches) | Nuria Vidal | nuria@demo.es |
+| Clientes | Lucía Navarro, Sergio Gil | lucia@ / sergio@demo.es |
+
+Datos del calendario incluidos: mañana a las 10:00 la franja está llena (2/2), el próximo sábado está completo y hay un festivo dentro de ~9 días.
 
 ## Cómo probar el flujo completo
 

@@ -3,12 +3,14 @@
 import { customerNotificationForStatus } from "@/lib/domain/repair-status";
 import {
   calculateEstimateTotals,
-  canCustomerRespond,
+  canCustomerAccept,
+  canCustomerRejectOrAsk,
   DEFAULT_TAX_RATE,
   lineTotal,
 } from "@/lib/domain/estimate";
-import { issueCategoryLabel } from "@/lib/domain/appointments";
-import { formatDateTime, vehicleName } from "@/lib/format";
+import { checkSlotBookable, issueCategoryLabel } from "@/lib/domain/appointments";
+import { validateSchedule, type ScheduleInput } from "@/lib/domain/schedule";
+import { formatDateTime, formatWhen, vehicleName } from "@/lib/format";
 import { getSessionUserId, getState, setSessionUserId, transact, uuid } from "@/lib/mock/store";
 import type { MockState } from "@/lib/mock/types";
 import type {
@@ -21,6 +23,7 @@ import type {
 import type {
   AppointmentRequestInput,
   EstimateFormInput,
+  SignupInput,
   VehicleInput,
 } from "@/lib/validators";
 
@@ -36,6 +39,8 @@ const LATENCY_MS = 250;
 const delay = () => new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
 
 export class ActionError extends Error {}
+/** La hora elegida ya no está disponible (llena, cerrada o pasada). */
+export class SlotUnavailableError extends ActionError {}
 
 // ---------------------------------------------------------------------------
 // Helpers internos
@@ -171,6 +176,30 @@ export async function signOut() {
   setSessionUserId(null);
 }
 
+/** Alta de cliente. Con Supabase: supabase.auth.signUp + trigger que crea el perfil. */
+export async function signUp(input: SignupInput): Promise<Profile> {
+  await delay();
+  return transact((draft) => {
+    const email = input.email.trim().toLowerCase();
+    if (draft.auth_users.some((u) => u.email.toLowerCase() === email)) {
+      throw new ActionError("Ya existe una cuenta con ese email. Prueba a entrar.");
+    }
+    const id = uuid();
+    draft.auth_users.push({ id, email, password: input.password });
+    const profile: Profile = {
+      id,
+      full_name: input.full_name.trim(),
+      phone: input.phone.trim(),
+      role: "customer",
+      workshop_id: null,
+      created_at: nowIso(),
+    };
+    draft.db.profiles.push(profile);
+    setSessionUserId(id);
+    return profile;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Vehículos
 // ---------------------------------------------------------------------------
@@ -220,13 +249,15 @@ export async function requestAppointment(
     if (!vehicle) throw new ActionError("Elige uno de tus vehículos.");
     const workshop = draft.db.workshops[0];
 
-    const taken = draft.db.appointments.some(
-      (a) =>
-        a.workshop_id === workshop.id &&
-        (a.status === "requested" || a.status === "confirmed") &&
-        a.scheduled_at === input.scheduled_at,
+    // Se comprueba en el momento de guardar: otra persona puede haber
+    // reservado la última plaza mientras el cliente rellenaba el formulario.
+    const check = checkSlotBookable(
+      draft.db.workshop_availability.filter((a) => a.workshop_id === workshop.id),
+      draft.db.workshop_closures.filter((c) => c.workshop_id === workshop.id),
+      draft.db.appointments.filter((a) => a.workshop_id === workshop.id),
+      input.scheduled_at,
     );
-    if (taken) throw new ActionError("Esa hora acaba de ocuparse. Elige otra, por favor.");
+    if (!check.ok) throw new SlotUnavailableError(check.reason);
 
     const id = uuid();
     const createdAt = nowIso();
@@ -297,6 +328,7 @@ export async function confirmAppointment(appointmentId: string): Promise<string>
       current_status: "appointment_confirmed",
       opened_at: at,
       completed_at: null,
+      estimated_ready_at: null,
       created_at: at,
       updated_at: at,
     };
@@ -316,7 +348,7 @@ export async function confirmAppointment(appointmentId: string): Promise<string>
       repair.id,
       "appointment_confirmed",
       "Cita confirmada",
-      `Te esperamos el ${formatDateTime(appointment.scheduled_at)} con tu ${vehicleLabel(draft, appointment.vehicle_id)}.`,
+      `Te esperamos ${formatWhen(appointment.scheduled_at)} con tu ${vehicleLabel(draft, appointment.vehicle_id)}.`,
     );
     return repair.id;
   });
@@ -356,10 +388,10 @@ export async function changeRepairStatus(
     if (repair.current_status === to) return;
 
     if (!options.manual && to === "repair_in_progress") {
-      const accepted = draft.db.estimates.some(
-        (e) => e.repair_order_id === repairId && e.status === "accepted",
-      );
-      if (!accepted) {
+      const latest = draft.db.estimates
+        .filter((e) => e.repair_order_id === repairId && e.status !== "draft")
+        .sort((a, b) => b.version - a.version)[0];
+      if (latest?.status !== "accepted") {
         throw new ActionError("El cliente todavía no ha aceptado el presupuesto.");
       }
     }
@@ -407,6 +439,7 @@ export async function getOrCreateDraftEstimate(repairId: string): Promise<string
       sent_at: null,
       accepted_at: null,
       rejected_at: null,
+      estimated_ready_at: latest?.estimated_ready_at ?? repair.estimated_ready_at ?? null,
       version: (latest?.version ?? 0) + 1,
       created_at: at,
       updated_at: at,
@@ -442,7 +475,10 @@ function writeDraft(draft: MockState, estimateId: string, input: EstimateFormInp
       sort_order: index,
     })),
   );
-  Object.assign(estimate, calculateEstimateTotals(input.items, input.tax_rate), { updated_at: nowIso() });
+  Object.assign(estimate, calculateEstimateTotals(input.items, input.tax_rate), {
+    estimated_ready_at: input.estimated_ready_at,
+    updated_at: nowIso(),
+  });
 }
 
 export async function sendEstimate(estimateId: string, input: EstimateFormInput): Promise<void> {
@@ -457,6 +493,7 @@ export async function sendEstimate(estimateId: string, input: EstimateFormInput)
     estimate.status = "sent";
     estimate.sent_at = at;
     estimate.updated_at = at;
+    repair.estimated_ready_at = estimate.estimated_ready_at;
 
     if (repair.current_status === "estimate_pending") {
       // Nueva versión sobre un presupuesto ya pendiente: queda en el historial.
@@ -491,9 +528,16 @@ export async function respondToEstimate(
     const newer = draft.db.estimates.some(
       (e) => e.repair_order_id === repair.id && e.version > estimate.version && e.status !== "draft",
     );
-    if (!canCustomerRespond(estimate.status) || newer) {
+    const ctx = {
+      status: estimate.status,
+      isLatest: !newer,
+      repairAwaitingEstimate: repair.current_status === "estimate_pending",
+    };
+    const allowed = response === "accept" ? canCustomerAccept(ctx) : canCustomerRejectOrAsk(ctx);
+    if (!allowed) {
       throw new ActionError("Este presupuesto ya no admite respuesta.");
     }
+    const changedMind = response === "accept" && estimate.status === "rejected";
 
     const at = nowIso();
     estimate.updated_at = at;
@@ -512,10 +556,13 @@ export async function respondToEstimate(
 
     switch (response) {
       case "accept":
+        // rejected_at se conserva para la trazabilidad si había cambiado de opinión.
         estimate.status = "accepted";
         estimate.accepted_at = at;
+        if (changedMind) addMessage("He cambiado de opinión: acepto el presupuesto.");
         notifyStaff(draft, repair.workshop_id, repair.id, "estimate_accepted",
-          "Presupuesto aceptado", `${customer.full_name} ha aceptado el presupuesto v${estimate.version} · ${vehicle}`);
+          changedMind ? "El cliente ha cambiado de opinión" : "Presupuesto aceptado",
+          `${customer.full_name} ha aceptado el presupuesto v${estimate.version} · ${vehicle}`);
         break;
       case "reject":
         estimate.status = "rejected";
@@ -620,4 +667,163 @@ export function markNotificationsRead() {
       if (n.user_id === userId && !n.read_at) n.read_at = at;
     }
   });
+}
+
+// ---------------------------------------------------------------------------
+// Citas: anulación por el cliente
+// ---------------------------------------------------------------------------
+
+/**
+ * El cliente anula una solicitud o una cita confirmada (mientras el coche no
+ * haya llegado). La plaza queda libre al instante.
+ */
+export async function cancelAppointment(appointmentId: string): Promise<void> {
+  await delay();
+  transact((draft) => {
+    const appointment = draft.db.appointments.find((a) => a.id === appointmentId);
+    if (!appointment) throw new ActionError("No encontramos esta cita.");
+    const customer = requireCustomer(draft, appointment.customer_id);
+    if (appointment.status !== "requested" && appointment.status !== "confirmed") {
+      throw new ActionError("Esta cita ya no se puede anular.");
+    }
+    const repair = draft.db.repair_orders.find((r) => r.appointment_id === appointment.id);
+    if (repair && repair.current_status !== "appointment_confirmed") {
+      throw new ActionError("El coche ya está en el taller: habla con ellos para cualquier cambio.");
+    }
+
+    appointment.status = "cancelled";
+    if (repair) applyStatusChange(draft, repair, "closed", customer.id, "Cita anulada por el cliente");
+
+    notifyStaff(
+      draft,
+      appointment.workshop_id,
+      repair?.id ?? null,
+      "appointment_cancelled",
+      "Cita anulada por el cliente",
+      `${customer.full_name} · ${vehicleLabel(draft, appointment.vehicle_id)} · ${formatDateTime(appointment.scheduled_at)}`,
+    );
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Fecha estimada de entrega
+// ---------------------------------------------------------------------------
+
+export async function setEstimatedReadyAt(repairId: string, estimatedReadyAt: string | null): Promise<void> {
+  await delay();
+  transact((draft) => {
+    const repair = findRepair(draft, repairId);
+    requireStaff(draft, repair.workshop_id);
+    if (repair.estimated_ready_at === estimatedReadyAt) return;
+    repair.estimated_ready_at = estimatedReadyAt;
+    repair.updated_at = nowIso();
+    if (repair.current_status !== "closed") {
+      notify(
+        draft,
+        repair.customer_id,
+        repair.id,
+        "estimated_ready_changed",
+        estimatedReadyAt ? "Nueva fecha estimada" : "Fecha estimada retirada",
+        estimatedReadyAt
+          ? `Tu ${vehicleLabel(draft, repair.vehicle_id)} estará listo aproximadamente ${formatWhen(estimatedReadyAt)}.`
+          : `El taller te avisará cuando tenga una nueva fecha para tu ${vehicleLabel(draft, repair.vehicle_id)}.`,
+      );
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Horario del taller y días cerrados
+// ---------------------------------------------------------------------------
+
+/**
+ * Sustituye el horario semanal. Las citas ya reservadas se mantienen aunque
+ * queden fuera del nuevo horario; se devuelve cuántas hay para avisar.
+ */
+export async function saveWorkshopSchedule(workshopId: string, input: ScheduleInput): Promise<{ outside: number }> {
+  await delay();
+  return transact((draft) => {
+    requireStaff(draft, workshopId);
+    const errors = validateSchedule(input);
+    const first = Object.values(errors)[0];
+    if (first) throw new ActionError(first);
+
+    draft.db.workshop_availability = [
+      ...draft.db.workshop_availability.filter((r) => r.workshop_id !== workshopId),
+      ...input.days
+        .filter((d) => d.open)
+        .flatMap((d) =>
+          d.ranges.map((r) => ({
+            id: uuid(),
+            workshop_id: workshopId,
+            weekday: d.weekday,
+            start_time: r.start,
+            end_time: r.end,
+            slot_minutes: input.slot_minutes,
+            capacity: r.capacity,
+            is_active: true,
+          })),
+        ),
+    ];
+
+    // Citas futuras que ya no encajan en el horario nuevo.
+    const now = Date.now();
+    const rows = draft.db.workshop_availability.filter((r) => r.workshop_id === workshopId);
+    const outside = draft.db.appointments.filter((a) => {
+      if (a.workshop_id !== workshopId || a.status === "cancelled" || a.status === "completed") return false;
+      const when = new Date(a.scheduled_at);
+      if (when.getTime() < now) return false;
+      const hhmm = `${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}`;
+      return !rows.some((r) => r.weekday === when.getDay() && r.start_time <= hhmm && hhmm < r.end_time);
+    }).length;
+    return { outside };
+  });
+}
+
+/** Cierra un día concreto (festivo, vacaciones…). Devuelve las citas ya reservadas ese día. */
+export async function addWorkshopClosure(
+  workshopId: string,
+  date: string,
+  reason: string,
+): Promise<{ affected: number }> {
+  await delay();
+  return transact((draft) => {
+    requireStaff(draft, workshopId);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ActionError("Elige una fecha.");
+    const today = new Date();
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    if (date < todayKey) throw new ActionError("No puedes cerrar un día que ya ha pasado.");
+    if (draft.db.workshop_closures.some((c) => c.workshop_id === workshopId && c.date === date)) {
+      throw new ActionError("Ese día ya está marcado como cerrado.");
+    }
+    draft.db.workshop_closures.push({
+      id: uuid(),
+      workshop_id: workshopId,
+      date,
+      reason: reason.trim() || null,
+      created_at: nowIso(),
+    });
+    const affected = draft.db.appointments.filter(
+      (a) =>
+        a.workshop_id === workshopId &&
+        (a.status === "requested" || a.status === "confirmed") &&
+        localDateKey(a.scheduled_at) === date,
+    ).length;
+    return { affected };
+  });
+}
+
+export async function removeWorkshopClosure(closureId: string): Promise<void> {
+  await delay();
+  transact((draft) => {
+    const closure = draft.db.workshop_closures.find((c) => c.id === closureId);
+    if (!closure) return;
+    requireStaff(draft, closure.workshop_id);
+    draft.db.workshop_closures = draft.db.workshop_closures.filter((c) => c.id !== closureId);
+  });
+}
+
+function localDateKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }

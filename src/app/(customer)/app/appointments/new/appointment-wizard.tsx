@@ -24,7 +24,7 @@ import { BackHeader } from "@/components/customer/back-header";
 import { SlotPicker } from "@/components/customer/slot-picker";
 import { VehicleFormDialog } from "@/components/customer/vehicle-form-dialog";
 import { MediaUploader, type UploadItem } from "@/components/media/media-uploader";
-import { requestAppointment } from "@/lib/data/actions";
+import { requestAppointment, SlotUnavailableError } from "@/lib/data/actions";
 import { useData, useRequiredProfile } from "@/lib/data/hooks";
 import { getCustomerVehicles, getDefaultWorkshop } from "@/lib/data/queries";
 import {
@@ -122,7 +122,10 @@ export function AppointmentWizard() {
       setSentId(id);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo enviar la solicitud");
-      if (error instanceof Error && error.message.includes("hora")) setStep("slot");
+      if (error instanceof SlotUnavailableError) {
+        update({ scheduledAt: null });
+        setStep("slot");
+      }
     } finally {
       setSubmitting(false);
     }

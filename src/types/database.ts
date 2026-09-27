@@ -125,6 +125,8 @@ export interface RepairOrder {
   current_status: RepairStatus;
   opened_at: ISODateTime;
   completed_at: ISODateTime | null;
+  /** Fecha orientativa en la que el coche estará listo (la fija el taller). */
+  estimated_ready_at: ISODateTime | null;
   created_at: ISODateTime;
   updated_at: ISODateTime;
 }
@@ -151,6 +153,8 @@ export interface Estimate {
   sent_at: ISODateTime | null;
   accepted_at: ISODateTime | null;
   rejected_at: ISODateTime | null;
+  /** Plazo orientativo propuesto con este presupuesto. */
+  estimated_ready_at: ISODateTime | null;
   version: number;
   created_at: ISODateTime;
   updated_at: ISODateTime;
@@ -198,7 +202,19 @@ export interface WorkshopAvailability {
   /** "HH:mm" */
   end_time: string;
   slot_minutes: number;
+  /** Coches (citas) que se pueden recibir en cada franja de este tramo. */
+  capacity: number;
   is_active: boolean;
+}
+
+/** Días concretos en los que el taller no da citas (festivos, vacaciones…). */
+export interface WorkshopClosure {
+  id: UUID;
+  workshop_id: UUID;
+  /** "YYYY-MM-DD" (fecha local del taller) */
+  date: string;
+  reason: string | null;
+  created_at: ISODateTime;
 }
 
 /** Conjunto de tablas. Es la forma de la BBDD falsa. */
@@ -215,4 +231,5 @@ export interface Database {
   messages: Message[];
   notifications: Notification[];
   workshop_availability: WorkshopAvailability[];
+  workshop_closures: WorkshopClosure[];
 }

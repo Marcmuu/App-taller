@@ -27,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EstimateSummary } from "@/components/estimate/estimate-summary";
+import { EstimatedReadyPicker } from "@/components/estimate/estimated-ready-picker";
 import { saveEstimateDraft, sendEstimate } from "@/lib/data/actions";
 import type { RepairView } from "@/lib/data/queries";
 import {
@@ -69,6 +70,7 @@ export function EstimateEditor({
     resolver: zodResolver(estimateFormSchema),
     defaultValues: {
       tax_rate: estimate.tax_rate,
+      estimated_ready_at: estimate.estimated_ready_at,
       items: items.map(({ type, description, quantity, unit_price }) => ({ type, description, quantity, unit_price })),
     },
   });
@@ -166,6 +168,12 @@ export function EstimateEditor({
           );
         })}
         {itemsError && <p className="text-sm text-destructive">{itemsError}</p>}
+
+        <section className="rounded-2xl border bg-card p-5">
+          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Plazo estimado de entrega</h2>
+          <p className="mb-4 text-sm text-muted-foreground">¿Cuándo crees que estará listo si el cliente acepta hoy?</p>
+          <EstimatedReadyField control={form.control} onChange={(iso) => form.setValue("estimated_ready_at", iso, { shouldDirty: true })} />
+        </section>
       </div>
 
       <aside className="lg:sticky lg:top-22 lg:self-start">
@@ -284,8 +292,26 @@ function LineRow({
       <Button type="button" variant="ghost" size="icon-lg" onClick={onRemove} aria-label="Quitar línea" className="row-start-2 col-start-3 sm:row-auto sm:col-auto">
         <Trash2 className="text-muted-foreground" aria-hidden />
       </Button>
+      {errors && (
+        <p role="alert" className="col-span-full text-sm text-destructive">
+          {[errors.description?.message, errors.quantity?.message && `Cantidad: ${errors.quantity.message}`, errors.unit_price?.message && `Precio: ${errors.unit_price.message}`]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      )}
     </div>
   );
+}
+
+function EstimatedReadyField({
+  control,
+  onChange,
+}: {
+  control: Control<EstimateFormInput>;
+  onChange: (iso: string | null) => void;
+}) {
+  const value = useWatch({ control, name: "estimated_ready_at" });
+  return <EstimatedReadyPicker value={value ?? null} onChange={onChange} />;
 }
 
 function useLiveTotals(control: Control<EstimateFormInput>) {

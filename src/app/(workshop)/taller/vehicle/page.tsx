@@ -9,6 +9,7 @@ import { MediaGallery } from "@/components/media/media-gallery";
 import { CommunicationTimeline } from "@/components/repair/communication-timeline";
 import { ManualStatusDialog } from "@/components/repair/manual-status-dialog";
 import { NextRepairActionButton } from "@/components/repair/next-repair-action-button";
+import { EstimatedReadyControl } from "@/components/workshop/estimated-ready-control";
 import { StatusBadge } from "@/components/repair/status-badge";
 import { useData, useRequiredProfile } from "@/lib/data/hooks";
 import {
@@ -21,7 +22,7 @@ import {
 import { DRIVABLE_LABELS, issueCategoryLabel } from "@/lib/domain/appointments";
 import { ESTIMATE_STATUS_META } from "@/lib/domain/estimate";
 import { getNextRepairAction, REPAIR_STATUS_META } from "@/lib/domain/repair-status";
-import { formatCurrency, formatDateTime, vehicleName } from "@/lib/format";
+import { formatCurrency, formatDateTime, formatWhen, vehicleName } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { routes } from "@/lib/routes";
 
@@ -75,17 +76,22 @@ export default function WorkshopRepairDetailPage() {
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                   <span className="rounded border bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">{vehicle.license_plate}</span>
                   {vehicle.year && <span>{vehicle.year}</span>}
-                  {appointment && <span>· Cita {formatDateTime(appointment.scheduled_at)}</span>}
+                  {appointment && <span>· Cita {formatWhen(appointment.scheduled_at)}</span>}
                 </p>
               </div>
-              <StatusBadge status={repair.current_status} variant="long" className="text-sm" />
+              <StatusBadge status={repair.current_status} estimateStatus={estimate?.status} variant="long" className="text-sm" />
             </div>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="sm:w-80">
                 <NextRepairActionButton repair={repair} estimate={estimate} />
               </div>
               {action.hint && (
-                <p className={cn("text-sm font-medium", action.type === "wait_customer" ? "text-muted-foreground" : "text-amber-700")}>
+                <p
+                  className={cn(
+                    "text-sm font-medium",
+                    action.type === "wait_customer" ? "text-muted-foreground" : estimate?.status === "rejected" ? "text-red-700" : "text-amber-700",
+                  )}
+                >
                   {action.hint}
                 </p>
               )}
@@ -93,6 +99,11 @@ export default function WorkshopRepairDetailPage() {
                 <ManualStatusDialog repairId={repair.id} current={repair.current_status} />
               </div>
             </div>
+            {repair.current_status !== "closed" && repair.current_status !== "appointment_confirmed" && (
+              <div className="mt-4 border-t pt-4">
+                <EstimatedReadyControl key={repair.estimated_ready_at ?? "none"} repairId={repair.id} value={repair.estimated_ready_at} />
+              </div>
+            )}
           </section>
 
           {/* Problema */}

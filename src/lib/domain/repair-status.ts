@@ -122,8 +122,14 @@ export interface RepairAction {
   type: RepairActionType;
   nextStatus: RepairStatus | null;
   requiresConfirmation: boolean;
+  /** Texto del diálogo de confirmación (si requiresConfirmation). */
+  confirmText?: string;
+  /** Nota que se guarda en el historial al ejecutar la acción. */
+  note?: string;
   /** Texto de apoyo breve (p. ej. "Esperando respuesta del cliente"). */
   hint?: string;
+  /** Alternativa menos habitual que se muestra como botón secundario. */
+  secondary?: RepairAction;
 }
 
 export function getNextRepairAction(
@@ -153,16 +159,28 @@ export function getNextRepairAction(
           hint: "El cliente ha aceptado el presupuesto",
         });
       }
-      if (estimateStatus === "rejected" || estimateStatus === "question") {
+      if (estimateStatus === "rejected") {
+        return {
+          label: "NUEVO PRESUPUESTO",
+          type: "open_estimate",
+          nextStatus: null,
+          requiresConfirmation: false,
+          hint: "El cliente ha rechazado el presupuesto",
+          secondary: transition("DEVOLVER SIN REPARAR", "ready_for_pickup", {
+            requiresConfirmation: true,
+            note: "Sin reparar: el cliente rechazó el presupuesto",
+            confirmText:
+              "El coche quedará listo para recoger sin hacer la reparación y se avisará al cliente. Si más adelante acepta el presupuesto, podrás reabrir la reparación con «Corregir estado».",
+          }),
+        };
+      }
+      if (estimateStatus === "question") {
         return {
           label: "REVISAR PRESUPUESTO",
           type: "open_estimate",
           nextStatus: null,
           requiresConfirmation: false,
-          hint:
-            estimateStatus === "rejected"
-              ? "El cliente ha rechazado el presupuesto"
-              : "El cliente tiene una consulta",
+          hint: "El cliente tiene una consulta: respóndele en la conversación",
         };
       }
       if (estimateStatus === "draft") {
@@ -188,7 +206,10 @@ export function getNextRepairAction(
       return transition("LISTO PARA RECOGER", "ready_for_pickup");
 
     case "ready_for_pickup":
-      return transition("ENTREGAR Y CERRAR", "closed", { requiresConfirmation: true });
+      return transition("ENTREGAR Y CERRAR", "closed", {
+        requiresConfirmation: true,
+        confirmText: "Confirma que el cliente ha recogido el vehículo. La reparación se cerrará y pasará al historial.",
+      });
 
     case "closed":
       return {
@@ -203,15 +224,53 @@ export function getNextRepairAction(
 function transition(
   label: string,
   nextStatus: RepairStatus,
-  extra: Partial<Pick<RepairAction, "hint" | "requiresConfirmation">> = {},
+  extra: Partial<Pick<RepairAction, "hint" | "requiresConfirmation" | "confirmText" | "note">> = {},
 ): RepairAction {
   return {
     label,
     type: "transition",
     nextStatus,
     requiresConfirmation: extra.requiresConfirmation ?? false,
+    confirmText: extra.confirmText,
+    note: extra.note,
     hint: extra.hint,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Textos para el cliente (dependen también del presupuesto)
+// ---------------------------------------------------------------------------
+
+/** Etiqueta y explicación del estado actual tal como las ve el cliente. */
+export function getCustomerStatusCopy(
+  status: RepairStatus,
+  estimateStatus: EstimateStatus | null | undefined,
+): { label: string; description: string } {
+  if (status === "estimate_pending") {
+    if (estimateStatus === "rejected") {
+      return {
+        label: "Presupuesto rechazado",
+        description: "Has rechazado el presupuesto. Si cambias de opinión, todavía puedes aceptarlo.",
+      };
+    }
+    if (estimateStatus === "question") {
+      return {
+        label: "Consulta enviada",
+        description: "El taller responderá a tu duda en los mensajes. Mientras tanto puedes aceptar el presupuesto si lo tienes claro.",
+      };
+    }
+    if (estimateStatus === "accepted") {
+      return {
+        label: "Presupuesto aceptado",
+        description: "Gracias. El taller empezará la reparación en breve.",
+      };
+    }
+    if (estimateStatus !== "sent") {
+      return { label: "Preparando presupuesto", description: "El taller está preparando el presupuesto." };
+    }
+  }
+  const meta = REPAIR_STATUS_META[status];
+  return { label: meta.label, description: meta.customerDescription };
 }
 
 // ---------------------------------------------------------------------------

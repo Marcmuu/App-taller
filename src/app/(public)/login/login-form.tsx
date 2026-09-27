@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signIn } from "@/lib/data/actions";
-import { useMockState } from "@/lib/data/hooks";
+import { useCurrentProfile, useMockState } from "@/lib/data/hooks";
+import Link from "next/link";
 import { DEMO_PASSWORD } from "@/lib/mock/seed";
 import { loginSchema, type LoginInput } from "@/lib/validators";
 import { initials } from "@/lib/format";
@@ -19,6 +20,7 @@ export function LoginForm() {
   const router = useRouter();
   const area = useSearchParams().get("tipo") === "cliente" ? "customer" : "workshop";
   const state = useMockState();
+  const current = useCurrentProfile();
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
@@ -57,6 +59,16 @@ export function LoginForm() {
           {area === "customer" ? "Entra para ver tu coche" : "Acceso del taller"}
         </h1>
       </div>
+      {current && (
+        <div className="flex items-center justify-between gap-3 rounded-xl bg-primary/5 px-4 py-3 text-sm ring-1 ring-primary/15">
+          <span>
+            Ya has entrado como <strong>{current.full_name}</strong>.
+          </span>
+          <Link href={current.role === "customer" ? "/app" : "/taller"} className="shrink-0 font-medium text-primary hover:underline">
+            Continuar
+          </Link>
+        </div>
+      )}
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
@@ -92,6 +104,14 @@ export function LoginForm() {
           />
           {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
         </div>
+        {area === "customer" && (
+          <p className="text-center text-sm text-muted-foreground">
+            ¿Es tu primera vez?{" "}
+            <Link href="/registro" className="font-medium text-primary hover:underline">
+              Crea tu cuenta
+            </Link>
+          </p>
+        )}
         {errors.root && (
           <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {errors.root.message}
