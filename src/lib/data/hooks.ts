@@ -1,12 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import {
-  getSessionUserId,
-  getState,
-  subscribe,
-  subscribeSession,
-} from "@/lib/mock/store";
+import { getSessionUserId, getState, subscribe, subscribeSession } from "@/lib/data/store";
 import type { MockState } from "@/lib/mock/types";
 import type { Profile } from "@/types/database";
 

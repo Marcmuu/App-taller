@@ -5,9 +5,9 @@ import Link from "next/link";
 import { CalendarX2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { dismissDeclinedAppointment } from "@/lib/data/actions";
+import { acceptProposedTime, dismissDeclinedAppointment } from "@/lib/data/actions";
 import { issueCategoryLabel } from "@/lib/domain/appointments";
-import { formatDateTime, vehicleName } from "@/lib/format";
+import { formatDateTime, formatWhen, vehicleName } from "@/lib/format";
 import { routes } from "@/lib/routes";
 import type { Appointment, Vehicle } from "@/types/database";
 
@@ -22,7 +22,9 @@ export function DeclinedRequest({ appointment, vehicle }: { appointment: Appoint
           <CalendarX2 className="size-5" aria-hidden />
         </span>
         <div className="min-w-0">
-          <p className="font-semibold">El taller no puede atenderte a esa hora</p>
+          <p className="font-semibold">
+            {appointment.proposed_at ? "El taller te propone otra hora" : "El taller no puede atenderte a esa hora"}
+          </p>
           <p className="text-sm text-muted-foreground">
             {vehicle ? vehicleName(vehicle) : "Vehículo"} · {issueCategoryLabel(appointment.issue_category)} · pediste{" "}
             <span className="line-through">{formatDateTime(appointment.scheduled_at)}</span>
@@ -30,12 +32,35 @@ export function DeclinedRequest({ appointment, vehicle }: { appointment: Appoint
           {appointment.cancellation_reason && (
             <p className="mt-2 rounded-lg bg-background/70 px-3 py-2 text-sm">«{appointment.cancellation_reason}»</p>
           )}
+          {appointment.proposed_at && (
+            <p className="mt-2 text-sm font-semibold">Propuesta: {formatWhen(appointment.proposed_at)}</p>
+          )}
         </div>
       </div>
       <div className="grid grid-cols-[1fr_auto] gap-2">
-        <Button asChild size="lg" className="h-11">
-          <Link href={routes.customerReschedule(appointment.id)}>Elegir otra fecha</Link>
-        </Button>
+        {appointment.proposed_at ? (
+          <Button
+            size="lg"
+            className="h-11"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await acceptProposedTime(appointment.id);
+                toast.success("¡Cita confirmada!");
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "No se pudo aceptar");
+                setBusy(false);
+              }
+            }}
+          >
+            Aceptar esta hora
+          </Button>
+        ) : (
+          <Button asChild size="lg" className="h-11">
+            <Link href={routes.customerReschedule(appointment.id)}>Elegir otra fecha</Link>
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="lg"
@@ -53,6 +78,11 @@ export function DeclinedRequest({ appointment, vehicle }: { appointment: Appoint
         >
           Descartar
         </Button>
+        {appointment.proposed_at && (
+          <Link href={routes.customerReschedule(appointment.id)} className="col-span-2 text-center text-sm font-medium text-primary hover:underline">
+            Prefiero elegir otra fecha
+          </Link>
+        )}
       </div>
     </article>
   );

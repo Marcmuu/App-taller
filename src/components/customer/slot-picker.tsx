@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { getBookingCalendar, slotKey, type DayInfo } from "@/lib/domain/appointments";
 import { WEEKDAYS } from "@/lib/domain/schedule";
 import { useData } from "@/lib/data/hooks";
-import { getDefaultWorkshop } from "@/lib/data/queries";
+import { bookingAppointments, getDefaultWorkshop } from "@/lib/data/queries";
 import { cn } from "@/lib/utils";
 
 /**
@@ -29,7 +29,7 @@ export function SlotPicker({
     return getBookingCalendar(
       s.db.workshop_availability.filter((a) => a.workshop_id === workshop.id),
       s.db.workshop_closures.filter((c) => c.workshop_id === workshop.id),
-      s.db.appointments.filter((a) => a.workshop_id === workshop.id),
+      bookingAppointments(s, workshop.id),
     );
   });
 

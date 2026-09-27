@@ -65,6 +65,7 @@ Abajo siempre hay tres pestañas: **Inicio · Vehículos · Perfil**. Arriba, la
   - **Verde «Ver recogida»**: el coche está listo.
   - **«Ver seguimiento»**: no tienes que hacer nada.
 - **Solicitudes enviadas** (pendientes de confirmar), con botón **«Anular»**.
+- Si el taller no puede a esa hora, aparece un aviso con su mensaje. Si **te propone otra hora**, la aceptas con **«Aceptar esta hora»** (un toque y queda confirmada) o eliges otra con «Prefiero elegir otra fecha».
 - **«Solicitar cita»** e **Historial** (las citas anuladas aparecen como «Anulada»).
 - Sin coches → invita a añadir uno. Sin citas → explica cómo pedirla.
 
@@ -92,7 +93,8 @@ Queda **«Pendiente de confirmar»** hasta que el taller la acepte.
 ### 3.5 Seguimiento de la reparación (la pantalla principal)
 - **Estado actual en grande** con una frase sencilla, última actualización y, si existe, **«Listo aproximadamente: …»** (orientativo; si cambia, llega un aviso).
 - **Línea de tiempo** con los 6 pasos (Cita confirmada → Vehículo recibido → Diagnóstico → Presupuesto → Reparación iniciada → Listo para recoger) (hechos con día y hora, el actual resaltado, los pendientes en gris). Si algún paso no se hizo (por ejemplo, el coche se devolvió sin reparar), sale tachado como **«No realizado»**.
-- Botones: el principal según el momento, **«Contactar con el taller»** y, mientras la cita está confirmada y el coche aún no ha llegado, **«Anular cita»** (la hora queda libre).
+- Botones: el principal según el momento, **«Contactar con el taller»** y, mientras la cita está confirmada y el coche aún no ha llegado, **«Cambiar fecha»** (eliges otra hora libre y la cita sigue confirmada; el taller recibe un aviso) y **«Anular cita»** (la hora queda libre).
+- Cuando el coche se entrega, si el taller tiene enlace de reseñas, aparece **«¿Qué tal ha ido?» → Dejar una reseña**.
 - **Se actualiza solo**, sin recargar.
 
 ### 3.6 Presupuesto
@@ -108,6 +110,7 @@ Queda **«Pendiente de confirmar»** hasta que el taller la acepte.
 - **Consulta con el taller**: para preguntar lo que quieras aunque no tengas ninguna reparación (precios, dudas, citas…).
 - **Una conversación por reparación**, con los cambios de estado y presupuestos intercalados.
 - Responde cualquier persona del taller; tus mensajes muestran **«Visto»** cuando los han leído. Botón para **llamar**.
+- **Fotos**: con el botón de la cámara adjuntas una foto (se puede enviar sola o con texto). Tocándola se ve en grande.
 - Acceso también desde **Perfil → Escribir al taller** y desde «Contactar con el taller» en el seguimiento.
 
 ### 3.8 Listo para recoger
@@ -124,7 +127,7 @@ Horario del taller, dirección con «Cómo llegar», **trabajos realizados y tot
 Menú superior: **Vehículos · Calendario · Comunicaciones · Horario**, campana de avisos y menú de usuario. En el móvil se muestran solo los iconos.
 
 ### 4.1 Panel de vehículos
-**Solicitudes de cita** arriba: coche, cliente, día y hora, motivo, descripción, si se puede conducir y fotos. **«CONFIRMAR CITA»** o **«No puedo»** (con mensaje para el cliente).
+**Solicitudes de cita** arriba: coche, cliente, día y hora, motivo, descripción, si se puede conducir y fotos. **«CONFIRMAR CITA»** o **«No puedo»**: escribes un mensaje al cliente y, si quieres, marcas **«Proponer otra hora»** y eliges una en el calendario. El cliente la acepta con un toque.
 
 **Filtros**: Todos · Citas · Recibidos · Diagnóstico · Presupuesto · Reparación · Listos · **Rechazados**. Los rechazados van aparte para que no abulten los pendientes; en «Todos» salen al final.
 
@@ -178,7 +181,15 @@ Se ve al momento si el cliente acepta, rechaza, pregunta o **cambia de opinión*
 - Lo pueden cambiar el administrador y los mecánicos.
 
 ### 4.8 Comunicaciones y avisos
-Todas las conversaciones con buscador y contador de no leídos: **consultas generales** de clientes (aunque no tengan coche en el taller, marcadas como «Consulta general») y la conversación de **cada reparación**. Todo el equipo ve y responde las mismas conversaciones; los mensajes del taller salen a la derecha con el nombre de quien escribió. La campana reúne solicitudes, **citas anuladas por el cliente**, presupuestos aceptados/rechazados/consultas, cambios de opinión y mensajes.
+Se pueden enviar **fotos** en cualquier conversación (botón de la cámara). Todas las conversaciones con buscador y contador de no leídos: **consultas generales** de clientes (aunque no tengan coche en el taller, marcadas como «Consulta general») y la conversación de **cada reparación**. Todo el equipo ve y responde las mismas conversaciones; los mensajes del taller salen a la derecha con el nombre de quien escribió. La campana reúne solicitudes, **citas anuladas por el cliente**, presupuestos aceptados/rechazados/consultas, cambios de opinión y mensajes.
+
+### 4.9 Mi taller y tarjetas QR
+Desde el **menú de usuario (tus iniciales) → Mi taller**:
+- **Datos del taller**: nombre, teléfono, email, dirección y **enlace para dejar reseñas** (el de tu ficha de Google). Solo los cambia el administrador.
+- **Tarjetas QR** para imprimir en A4 (10 tarjetas de 85 × 55 mm con guías de corte):
+  - **Tarjeta de la app** (azul): el QR abre la app para pedir cita y seguir el coche.
+  - **Tarjeta de reseñas** (crema, con estrellas): el QR lleva a dejar una opinión.
+  - Eliges «Mitad y mitad», «Solo app» o «Solo reseñas» y pulsas **Imprimir**. Mejor en cartulina de 250-300 g. Tienes «Probar enlace» para comprobar a dónde lleva cada una.
 
 ---
 
@@ -197,7 +208,7 @@ Todas las conversaciones con buscador y contador de no leídos: **consultas gene
 | 9 | Cliente (David) | Presupuesto rechazado → **He cambiado de opinión: aceptar** |
 | 10 | Taller | El Focus sale de **Rechazados** y aparece **INICIAR REPARACIÓN** |
 
-Prueba también: entra como **Nuria** y escribe al taller desde Mensajes, luego entra como **Laura** y respóndele; entra como **Sergio** y usa **«Elegir otra fecha»**; añade un coche con una matrícula inventada (con vocales no te dejará); rechazar el presupuesto del Seat León (Carlos) y **Devolver sin reparar**, **Anular** una cita, «Corregir estado», «Deshacer», cerrar un **día festivo**, **crear una cuenta** nueva.
+Prueba también: en la solicitud de **Ana** pulsa **No puedo → Proponer otra hora** y acéptala desde Ana; como **Jorge**, **Cambiar fecha** de su Polo; envía una **foto** por el chat; imprime las **tarjetas QR** desde Mi taller; entra como **Nuria** y escribe al taller desde Mensajes, luego entra como **Laura** y respóndele; entra como **Sergio** y usa **«Elegir otra fecha»**; añade un coche con una matrícula inventada (con vocales no te dejará); rechazar el presupuesto del Seat León (Carlos) y **Devolver sin reparar**, **Anular** una cita, «Corregir estado», «Deshacer», cerrar un **día festivo**, **crear una cuenta** nueva.
 
 ---
 
@@ -211,8 +222,8 @@ Prueba también: entra como **Nuria** y escribe al taller desde Mensajes, luego 
 
 **¿Por qué los cambios aparecen solos?** Cliente y taller están conectados en tiempo real.
 
-**¿El chat funciona entre dos móviles distintos?** En esta demo no: los datos viven en cada navegador, así que cliente y taller tienen que estar en el mismo navegador (dos pestañas, la vista doble o cerrando sesión y entrando con la otra cuenta). En la versión con servidor (Supabase) funcionará entre cualquier dispositivo.
+**¿El chat funciona entre dos móviles distintos?** En la demo de GitHub Pages no: los datos viven en cada navegador, así que cliente y taller tienen que estar en el mismo navegador (dos pestañas, la vista doble o cerrando sesión y entrando con la otra cuenta). La versión con base de datos (Supabase) ya está hecha: ahí funciona entre cualquier dispositivo y en directo. Ver [DESPLIEGUE_Y_COSTES.md](DESPLIEGUE_Y_COSTES.md).
 
 **¿Se puede instalar?** Sí: en el móvil, menú del navegador → «Añadir a pantalla de inicio».
 
-**¿Límites de la demo?** Los vídeos subidos pueden ocupar hasta 2 MB. En la versión real, los archivos irán a un almacenamiento en la nube y los datos a una base de datos compartida.
+**¿Límites de la demo?** En la demo del navegador los vídeos pueden ocupar hasta 2 MB. Con Supabase, hasta 50 MB (fotos 10 MB, que se reducen antes de subir).

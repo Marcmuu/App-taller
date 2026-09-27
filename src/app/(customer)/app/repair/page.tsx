@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { CalendarClock, CalendarX, Clock, Loader2, MessageCircle, SearchX } from "lucide-react";
+import { CalendarClock, CalendarX, Clock, Loader2, MessageCircle, SearchX, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,7 +23,7 @@ import { RepairStatusTimeline } from "@/components/repair/repair-status-timeline
 import { TONE_CLASSES } from "@/components/repair/status-tone";
 import { cancelAppointment } from "@/lib/data/actions";
 import { useData, useRequiredProfile } from "@/lib/data/hooks";
-import { getAppointmentMedia, getRepairHistory, getRepairView } from "@/lib/data/queries";
+import { getAppointmentMedia, getRepairHistory, getRepairView, getWorkshop } from "@/lib/data/queries";
 import { getCustomerRepairAction, shouldShowEstimatedReady } from "@/lib/domain/customer-actions";
 import { getCustomerStatusCopy, REPAIR_STATUS_META } from "@/lib/domain/repair-status";
 import { issueCategoryLabel } from "@/lib/domain/appointments";
@@ -42,6 +42,7 @@ export default function RepairTrackingPage() {
       view,
       history: getRepairHistory(s.db, id),
       media: getAppointmentMedia(s, view.repair.appointment_id),
+      reviewUrl: getWorkshop(s.db, view.repair.workshop_id)?.review_url ?? null,
     };
   });
 
@@ -54,7 +55,7 @@ export default function RepairTrackingPage() {
     );
   }
 
-  const { view, history, media } = data;
+  const { view, history, media, reviewUrl } = data;
   const { repair, vehicle, appointment } = view;
   const cancelled = appointment?.status === "cancelled";
   const meta = REPAIR_STATUS_META[repair.current_status];
@@ -118,10 +119,36 @@ export default function RepairTrackingPage() {
               )}
             </Link>
           </Button>
-          {repair.current_status === "appointment_confirmed" && appointment && (
-            <CancelAppointmentButton appointmentId={appointment.id} when={appointment.scheduled_at} />
+          {repair.current_status === "appointment_confirmed" && appointment && !cancelled && (
+            <div className="grid grid-cols-2 gap-2">
+              <Button asChild variant="outline" size="lg">
+                <Link href={routes.customerReschedule(appointment.id)}>
+                  <CalendarClock aria-hidden /> Cambiar fecha
+                </Link>
+              </Button>
+              <CancelAppointmentButton appointmentId={appointment.id} when={appointment.scheduled_at} />
+            </div>
           )}
         </div>
+      )}
+
+      {isClosed && !cancelled && reviewUrl && (
+        <section className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-center">
+          <p className="flex justify-center gap-0.5 text-amber-500" aria-hidden>
+            {Array.from({ length: 5 }, (_, i) => (
+              <Star key={i} className="size-6 fill-current" />
+            ))}
+          </p>
+          <div>
+            <p className="font-semibold">¿Qué tal ha ido?</p>
+            <p className="text-sm text-muted-foreground">Tu opinión ayuda al taller y a otros conductores. Solo te llevará un minuto.</p>
+          </div>
+          <Button asChild size="lg" className="w-full bg-amber-500 text-white hover:bg-amber-500/90">
+            <a href={reviewUrl} target="_blank" rel="noreferrer">
+              Dejar una reseña
+            </a>
+          </Button>
+        </section>
       )}
 
       {!cancelled && (

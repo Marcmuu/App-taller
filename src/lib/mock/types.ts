@@ -19,4 +19,10 @@ export interface MockState {
   auth_users: MockAuthUser[];
   /** storage_path → objeto */
   storage: Record<string, StorageObject>;
+  /**
+   * Ocupación de franjas de todos los clientes (sin datos personales). Con
+   * Supabase viene de la tabla booked_slots, porque cada cliente solo ve sus
+   * propias citas. En la BBDD de prueba se calcula con las citas.
+   */
+  occupancy?: Array<{ workshop_id: string; scheduled_at: string }>;
 }

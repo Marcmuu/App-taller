@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { AREA_URL, loginAs } from "./helpers";
 
 test.describe("Acceso", () => {

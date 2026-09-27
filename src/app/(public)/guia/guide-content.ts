@@ -135,6 +135,13 @@ export const CUSTOMER_STEPS: GuideStep[] = [
     frame: "phone",
   },
   {
+    id: "c-chat-foto",
+    title: "Fotos en el chat",
+    text: "Con el botón de la cámara se adjunta una foto a cualquier conversación, sola o con texto: un testigo del salpicadero, un ruido que se ve, la pieza que te han cambiado… Tocándola se ve en grande.",
+    image: "c-chat-foto",
+    frame: "phone",
+  },
+  {
     id: "c-recogida",
     title: "Listo para recoger",
     text: "Cuando el coche está listo: horario del taller, dirección con enlace a «Cómo llegar», trabajos realizados, total a pagar y botones para llamar o escribir.",
@@ -146,6 +153,14 @@ export const CUSTOMER_STEPS: GuideStep[] = [
     title: "Avisos, cita rechazada y perfil",
     text: "La campana muestra los avisos (cita confirmada, presupuesto recibido, coche listo…) y aparece un aviso emergente al llegar. Si el taller no puede atenderte a la hora pedida, en Inicio sale su motivo y el botón «Elegir otra fecha»: solo eliges la nueva hora, sin repetir la solicitud. En Perfil están tus datos, los del taller y «Escribir al taller».",
     image: "c-avisos",
+    frame: "phone",
+  },
+  {
+    id: "c-propuesta",
+    title: "El taller te propone otra hora",
+    text: "Si el taller no puede a la hora que pediste, puede proponerte otra. En Inicio sale su mensaje y la hora propuesta: «Aceptar esta hora» y la cita queda confirmada con un toque. Si no te viene bien, «Prefiero elegir otra fecha». Una cita ya confirmada también se puede mover con «Cambiar fecha» desde el seguimiento.",
+    tips: ["Al entregar el coche aparece «¿Qué tal ha ido?» con un botón para dejar una reseña del taller."],
+    image: "c-propuesta",
     frame: "phone",
   },
 ];
@@ -174,6 +189,13 @@ export const WORKSHOP_STEPS: GuideStep[] = [
     title: "Solicitudes de cita",
     text: "Las citas que piden los clientes aparecen solas arriba del panel, con el motivo, la descripción y las fotos. «Confirmar cita» avisa al cliente y abre el seguimiento; «No puedo» rechaza la solicitud con un mensaje.",
     image: "t-solicitud",
+    frame: "desktop",
+  },
+  {
+    id: "t-proponer",
+    title: "«No puedo» y proponer otra hora",
+    text: "Al pulsar «No puedo» se escribe un mensaje al cliente y, marcando «Proponer otra hora», se elige un hueco libre en el calendario. El cliente la acepta con un toque, sin tener que pedir la cita de nuevo.",
+    image: "t-proponer",
     frame: "desktop",
   },
   {
@@ -264,6 +286,17 @@ export const WORKSHOP_STEPS: GuideStep[] = [
     title: "Avisos del taller",
     text: "La campana reúne lo importante: nuevas solicitudes de cita, presupuestos aceptados, rechazados o con consulta y mensajes nuevos. Cada aviso lleva a su vehículo.",
     image: "t-avisos",
+    frame: "desktop",
+  },
+  {
+    id: "t-tarjetas",
+    title: "Mi taller y tarjetas QR",
+    text: "En el menú de usuario → «Mi taller» están los datos que ven los clientes y el enlace de reseñas de Google. Debajo, las tarjetas QR listas para imprimir en A4 (10 por hoja de 85 × 55 mm): una abre la app y otra lleva a dejar una reseña.",
+    tips: [
+      "«Mitad y mitad», «Solo app» o «Solo reseñas». Mejor en cartulina gruesa.",
+      "Déjalas en el mostrador o dentro del coche al entregarlo.",
+    ],
+    image: "t-tarjetas",
     frame: "desktop",
   },
 ];

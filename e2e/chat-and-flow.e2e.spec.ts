@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures";
 import { card, dateIn, dayCell, loginAs, weekdayOffset } from "./helpers";
 
 const T2 = dateIn(weekdayOffset(2));

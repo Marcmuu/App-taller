@@ -5,7 +5,7 @@ import { Camera, Film, Loader2, Play, X } from "lucide-react";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { MediaError, prepareMedia, type PreparedMedia } from "@/lib/media";
-import { uuid } from "@/lib/mock/store";
+import { uuid } from "@/lib/data/store";
 import { MEDIA_RULES } from "@/lib/validators";
 
 export interface UploadItem {

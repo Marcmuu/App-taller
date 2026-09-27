@@ -72,12 +72,18 @@ export interface Workshop {
   phone: string;
   email: string;
   address: string;
+  /** Enlace para dejar una reseña (p. ej. Google). Se usa en la tarjeta QR y al entregar el coche. */
+  review_url: string | null;
+  /** Zona horaria del horario del taller (IANA). */
+  timezone: string;
   created_at: ISODateTime;
 }
 
 /** Relacionado 1:1 con auth.users (mismo id). */
 export interface Profile {
   id: UUID;
+  /** Copia del email de auth.users (para mostrarlo sin acceder a auth). */
+  email: string;
   full_name: string;
   phone: string;
   role: UserRole;
@@ -115,6 +121,8 @@ export interface Appointment {
   cancellation_reason: string | null;
   /** El cliente ocultó el aviso de "el taller no puede atenderte". */
   customer_dismissed_at: ISODateTime | null;
+  /** Hora alternativa que propone el taller al rechazar la solicitud. */
+  proposed_at: ISODateTime | null;
   created_at: ISODateTime;
 }
 
@@ -192,7 +200,10 @@ export interface Message {
   customer_id: UUID;
   repair_order_id: UUID | null;
   sender_id: UUID;
+  /** Puede estar vacío si el mensaje solo lleva una foto. */
   body: string;
+  /** Foto adjunta (ruta en Storage). */
+  attachment_path: string | null;
   created_at: ISODateTime;
   read_at: ISODateTime | null;
 }

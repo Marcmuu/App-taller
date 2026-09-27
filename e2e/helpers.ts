@@ -59,6 +59,6 @@ export async function wizardToSlot(page: Page, vehicle: RegExp) {
 }
 
 /** Elige un día del calendario del cliente por fecha. */
-export function dayCell(page: Page, date: Date) {
+export function dayCell(page: Pick<Page, "getByRole">, date: Date) {
   return page.getByRole("gridcell", { name: new RegExp(`^${dayLabel(date)}:`) });
 }

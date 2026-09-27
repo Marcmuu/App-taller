@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND } from "@/lib/data/backend";
 import { MEDIA_RULES } from "@/lib/validators";
 import type { MediaType } from "@/types/database";
 
@@ -34,7 +35,7 @@ export function validateMediaFile(file: File): MediaType {
   }
   const mb = file.size / (1024 * 1024);
   if (mb > rules.maxMb) throw new MediaError(`El archivo supera ${rules.maxMb} MB.`);
-  if (type === "video" && mb > MEDIA_RULES.mockVideoMaxMb) {
+  if (type === "video" && BACKEND === "mock" && mb > MEDIA_RULES.mockVideoMaxMb) {
     throw new MediaError(`En la versión de prueba los vídeos pueden ocupar hasta ${MEDIA_RULES.mockVideoMaxMb} MB.`);
   }
   return type;

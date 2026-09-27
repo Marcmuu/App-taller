@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, CalendarDays, CarFront, LogOut, MessagesSquare, Settings2 } from "lucide-react";
+import { Bell, CalendarDays, CarFront, LogOut, MessagesSquare, QrCode, Settings2, Store } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import {
   DropdownMenu,
@@ -53,9 +53,9 @@ function Shell({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="flex min-h-dvh flex-col bg-muted/40">
+    <div className="flex min-h-dvh flex-col bg-muted/40 print:bg-white">
       <LiveNotifier />
-      <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b print:hidden bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6">
           <Link href="/taller" className="min-w-0 shrink">
             <Logo label={workshop?.name ?? "Taller"} className="text-sm sm:text-base" labelClassName="hidden sm:inline" />
@@ -88,7 +88,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 print:p-0">
         <Suspense fallback={<FullPageLoader />}>{children}</Suspense>
       </main>
     </div>
@@ -151,6 +151,17 @@ function UserMenu() {
             {profile.role === "workshop_admin" ? "Administrador" : "Mecánico"}
           </span>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/taller/negocio">
+            <Store aria-hidden /> Mi taller
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/taller/negocio#tarjetas">
+            <QrCode aria-hidden /> Tarjetas QR
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={async () => {

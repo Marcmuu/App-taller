@@ -6,6 +6,8 @@ import { execSync } from "node:child_process";
 const env = {
   ...process.env,
   STATIC_EXPORT: "1",
+  // La demo de GitHub Pages siempre funciona sin servidor
+  NEXT_PUBLIC_BACKEND: "mock",
   BASE_PATH: process.env.BASE_PATH ?? "/App-taller",
   MSYS_NO_PATHCONV: "1",
 };

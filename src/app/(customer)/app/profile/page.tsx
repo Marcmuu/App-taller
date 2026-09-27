@@ -13,7 +13,7 @@ import { initials } from "@/lib/format";
 export default function ProfilePage() {
   const router = useRouter();
   const profile = useRequiredProfile();
-  const email = useData((s) => s.auth_users.find((u) => u.id === profile.id)?.email ?? "");
+  const email = profile.email;
   const workshop = useData((s) => getDefaultWorkshop(s.db));
 
   return (

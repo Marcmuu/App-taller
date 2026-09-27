@@ -58,14 +58,19 @@ El trabajador debe poder actualizar el estado en menos de 5 segundos.
 | Fase | Estado |
 | --- | --- |
 | A — Scaffold y design system | ✅ |
-| B — 15 pantallas con datos falsos | ✅ (flujo completo navegable) |
+| B — Pantallas y flujo completo (BBDD de prueba) | ✅ |
 | B+ — Calendario, capacidad por franja, festivos, fecha estimada, rechazados, registro | ✅ |
-| B++ — Matrículas por país, chat general cliente↔taller, estados simplificados, reprogramar citas rechazadas | ✅ con 57 tests automáticos |
-| C — Supabase (migraciones, RLS, seed) | ⏳ siguiente |
-| D — Autenticación real | ⏳ |
-| E — Flujos conectados a Supabase + Realtime | ⏳ (hoy funcionan sobre la BBDD falsa) |
+| B++ — Matrículas por país, chat general, estados simplificados, reprogramar citas | ✅ |
+| B+++ — Proponer otra hora, cambiar cita confirmada, fotos en el chat, Mi taller, tarjetas QR, reseñas | ✅ |
+| C — Supabase: migraciones, RLS, RPC, Storage privado, seed demo | ✅ |
+| D — Autenticación real (Supabase Auth) | ✅ |
+| E — Todo conectado a Supabase + Realtime (chat entre móviles) | ✅ |
+| F — Publicar en Vercel + Supabase cloud | ⏳ ver [docs/DESPLIEGUE_Y_COSTES.md](docs/DESPLIEGUE_Y_COSTES.md) |
 
-Ahora mismo **no hace falta Supabase ni variables de entorno**: la app usa una BBDD falsa en el navegador.
+La app tiene dos motores de datos, que se eligen con `NEXT_PUBLIC_BACKEND`:
+
+- `mock`: BBDD de prueba en el navegador. No necesita nada; es la demo de GitHub Pages.
+- `supabase`: base de datos real, compartida entre todos los dispositivos.
 
 ## Requisitos
 
@@ -81,15 +86,28 @@ npm run dev
 
 Abre http://localhost:3000.
 
+Sin `.env.local` usa la BBDD de prueba del navegador.
+
+### Con Supabase en local (Docker)
+
+```bash
+npx supabase start -x vector,logflare,imgproxy,studio,postgres-meta,edge-runtime,mailpit
+cp .env.example .env.local        # las claves de local salen en: npx supabase status
+npm run db:demo -- reset          # carga las cuentas y datos demo con fechas de hoy
+npm run dev
+```
+
 Otros comandos:
 
 ```bash
 npm run lint    # ESLint
 npm run build   # build de producción (Turbopack)
-npm run start   # sirve el build
-npm test        # todos los tests (lógica + app completa en Chrome)
-npm run test:unit  # solo lógica de dominio (reservas, estados, presupuestos)
-npm run test:e2e   # solo flujos de extremo a extremo
+npm test        # lógica + app completa en Chrome (BBDD de prueba)
+npm run test:unit            # solo lógica de dominio
+npm run test:e2e             # solo flujos de extremo a extremo (mock)
+npm run test:e2e:supabase    # la misma batería contra Supabase local
+npm run test:db              # seguridad de la base de datos (RLS)
+npm run db:demo -- reset | purge | create-workshop "Nombre" email "Admin" [tel]
 ```
 
 ## Tests
@@ -104,6 +122,10 @@ Los tests usan Playwright y el **Chrome instalado** en el equipo (`channel: "chr
 | `e2e/repairs.e2e.spec.ts` | Flujo completo con fecha estimada y deshacer, rechazados y cambio de opinión, devolver sin reparar, consultas y versiones, borradores, mensajes |
 | `e2e/schedule.e2e.spec.ts` | Agenda semanal del taller, validación de tramos, cerrar días, festivos, franjas de 1 hora |
 | `e2e/chat-and-flow.e2e.spec.ts` | Matrículas por país y duplicados, chat general cliente↔taller entre cuentas, elegir otra fecha tras un rechazo, terminado en un clic, reparar sin presupuesto |
+| `e2e/extras.e2e.spec.ts` | El taller propone otra hora y el cliente la acepta, cambiar una cita confirmada, fotos en el chat, Mi taller (admin/mecánico), tarjetas QR, botón de reseña al entregar |
+| `e2e/security.db.spec.ts` | RLS y RPC contra Supabase: anónimo, cliente (solo lo suyo, no escribe directo, no toca datos ajenos ni fotos ajenas), funciones internas bloqueadas, taller y mecánico |
+
+Los tests `*.e2e.spec.ts` se ejecutan igual con los dos motores. Contra Supabase (`npm run test:e2e:supabase`) se reinician los datos demo antes de cada test y se espera a que el tiempo real esté al día. Antes, `scripts/local-realtime.mjs` sube el límite de mensajes por segundo del Realtime local (Docker), que con tantos reinicios seguidos descartaría mensajes; no afecta a la nube.
 
 ## Cuentas demo
 
@@ -162,32 +184,21 @@ Piezas clave:
 - **Cambio de estado atómico** (`changeRepairStatus` en `lib/data/actions.ts`): actualiza `repair_orders.current_status`, inserta en `repair_status_history` con usuario y hora y crea la notificación.
 - **Presupuestos versionados**: modificar uno ya enviado o aceptado crea una versión nueva que requiere nueva aceptación. Aceptar nunca inicia la reparación automáticamente.
 
-### La BBDD falsa
+### Motor de datos
 
-- Las tablas tienen **los mismos nombres y campos** que `02_MODELO_DATOS.md` (ver `src/types/database.ts`).
-- Se guardan en `localStorage` (`taller:mock-db`) y se comparten entre pestañas mediante el evento `storage`, que hace de Realtime.
-- Los datos seed (`src/lib/mock/seed.ts`) usan fechas relativas a "ahora", así el dashboard siempre parece de hoy. Los ids son uuids fijos, reutilizables en `supabase/seed.sql`.
-- Para añadir o cambiar campos: edita `types/database.ts` y `seed.ts`, y **sube `MOCK_SCHEMA_VERSION`** para que el navegador regenere los datos.
-- Las fotos se reducen y se guardan como data URL. Los vídeos están limitados a 2 MB solo en modo demo.
+Las pantallas solo usan `lib/data/*`: `store.ts` (estado y suscripción), `actions.ts` (todas las escrituras) y `queries.ts` (selectores puros). Cada motor implementa lo mismo, y si a Supabase le falta una acción, no compila.
 
-### Plan de migración a Supabase
+**BBDD de prueba** (`lib/mock/`, `lib/data/mock-actions.ts`)
+- Mismas tablas y campos que `02_MODELO_DATOS.md` (ver `src/types/database.ts`), guardadas en `localStorage`. El evento `storage` hace de Realtime entre pestañas.
+- Seed con fechas relativas a «ahora» (`src/lib/mock/seed.ts`). Si cambias campos, sube `MOCK_SCHEMA_VERSION`.
 
-Las pantallas solo usan `lib/data/*`, así que la migración se concentra ahí:
-
-1. `supabase/migrations/`: enums, tablas, índices, constraints y RLS según `05_SEGURIDAD_RLS.md`; bucket privado `repair-media`.
-2. `supabase/seed.sql` a partir de `lib/mock/seed.ts`.
-3. `lib/supabase/{client,server}.ts` con `@supabase/ssr` y `proxy.ts` (antes llamado *middleware*) para la sesión en cookies.
-4. `actions.ts` → Server Actions / RPC en Postgres (cambio de estado + historial + notificación en una transacción).
-5. `hooks.ts` → queries + suscripciones Realtime (`repair_orders`, `messages`, `estimates`).
-6. Eliminar `lib/mock/`, `DemoSwitcher` y los guards en cliente.
-
-Variables de entorno previstas (aún no necesarias):
-
-```bash
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
-SUPABASE_SERVICE_ROLE_KEY=   # solo en servidor, nunca en el navegador
-```
+**Supabase** (`supabase/migrations/`, `lib/data/supabase/`)
+- `…01_schema.sql`: tablas, índices, RLS de solo lectura, publicación Realtime, bucket privado `repair-media` con sus políticas.
+- `…02_functions.sql`: todas las escrituras son funciones `security definer` que validan permisos y reglas: transiciones de estado, capacidad por franja con bloqueo, versiones de presupuesto, rutas de archivos, etc. Los errores de negocio llegan en español a la pantalla.
+- `…03_demo.sql`: `reset_demo(seed)` carga el mismo seed que la BBDD de prueba (usuarios incluidos) y `purge_demo()` lo borra todo.
+- `…04_booked_slots.sql`: ocupación pública de horas (sin datos personales) para el calendario del cliente.
+- En el navegador: `store.ts` carga lo visible por RLS, se suscribe a `postgres_changes` y firma las URLs de las fotos. `actions.ts` llama a las RPC y sube los archivos a Storage.
+- La clave `service_role` solo la usa `scripts/db-admin.ts` en tu ordenador. La web usa la clave pública.
 
 ## Demo estática en GitHub Pages
 
@@ -203,9 +214,9 @@ Después se sube el contenido de `out/` a la rama `gh-pages` de este repositorio
 - Para que la exportación estática funcione, las pantallas con id usan parámetros de consulta (`/app/repair?id=…`) en vez de segmentos dinámicos. Todas esas URLs están en `src/lib/routes.ts`; al pasar a Vercel se puede volver a `/app/repairs/[id]`.
 - `/guia` (guía visual con vídeo) y `/demo` (cliente y taller lado a lado) solo existen para la demo. Las capturas y el vídeo están en `public/guia/`.
 
-## Deploy en Vercel
+## Deploy en Vercel + Supabase
 
-`npm run build` (sin `STATIC_EXPORT`) genera la versión con servidor. Hoy se puede importar en Vercel sin variables de entorno.
+Paso a paso, costes y cómo pasarlo a un cliente real: **[docs/DESPLIEGUE_Y_COSTES.md](docs/DESPLIEGUE_Y_COSTES.md)**.
 
 ## Documentación de producto
 

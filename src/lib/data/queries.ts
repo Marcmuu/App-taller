@@ -461,3 +461,16 @@ export function getWorkshopAgenda(state: MockState, workshopId: string, from: Da
     };
   });
 }
+
+/**
+ * Reservas que ocupan plaza en un taller, para calcular huecos libres. Con
+ * Supabase usa la ocupación pública (sin datos de otros clientes).
+ */
+export function bookingAppointments(state: MockState, workshopId: string): Appointment[] {
+  if (state.occupancy) {
+    return state.occupancy
+      .filter((o) => o.workshop_id === workshopId)
+      .map((o, i) => ({ id: `occ-${i}`, workshop_id: o.workshop_id, scheduled_at: o.scheduled_at, status: "confirmed" }) as Appointment);
+  }
+  return state.db.appointments.filter((a) => a.workshop_id === workshopId && occupiesSlot(a));
+}

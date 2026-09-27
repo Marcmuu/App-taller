@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { MediaGallery } from "@/components/media/media-gallery";
+import { SlotPicker } from "@/components/customer/slot-picker";
 import { confirmAppointment, declineAppointment } from "@/lib/data/actions";
 import type { AppointmentRequestView } from "@/lib/data/queries";
 import { DRIVABLE_LABELS, issueCategoryLabel } from "@/lib/domain/appointments";
@@ -24,6 +25,8 @@ export function AppointmentRequestCard({ request }: { request: AppointmentReques
   const [busy, setBusy] = useState(false);
   const [declineOpen, setDeclineOpen] = useState(false);
   const [reason, setReason] = useState("");
+  const [proposing, setProposing] = useState(false);
+  const [proposedAt, setProposedAt] = useState<string | null>(null);
 
   const confirm = async () => {
     setBusy(true);
@@ -40,8 +43,8 @@ export function AppointmentRequestCard({ request }: { request: AppointmentReques
   const decline = async () => {
     setBusy(true);
     try {
-      await declineAppointment(appointment.id, reason.trim());
-      toast("Solicitud rechazada. Hemos avisado al cliente.");
+      await declineAppointment(appointment.id, reason.trim(), proposing ? proposedAt : null);
+      toast(proposing && proposedAt ? "Hemos propuesto la nueva hora al cliente." : "Solicitud rechazada. Hemos avisado al cliente.");
       setDeclineOpen(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo rechazar");
@@ -91,24 +94,37 @@ export function AppointmentRequestCard({ request }: { request: AppointmentReques
       <p className="text-right text-[11px] text-muted-foreground">Solicitada {formatRelative(appointment.created_at)}</p>
 
       <Dialog open={declineOpen} onOpenChange={setDeclineOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Rechazar solicitud</DialogTitle>
-            <DialogDescription>{customer.full_name} recibirá este mensaje y podrá pedir otra hora.</DialogDescription>
+            <DialogTitle>No puedo a esa hora</DialogTitle>
+            <DialogDescription>
+              {customer.full_name} recibirá este mensaje. Puedes proponerle otra hora: la acepta con un toque.
+            </DialogDescription>
           </DialogHeader>
           <Textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Ej.: A esa hora estamos completos. ¿Te viene bien por la tarde?"
-            className="min-h-24"
+            className="min-h-20"
+            aria-label="Mensaje para el cliente"
           />
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={proposing}
+              onChange={(e) => setProposing(e.target.checked)}
+              className="size-4 accent-[var(--color-primary)]"
+            />
+            Proponer otra hora
+          </label>
+          {proposing && <SlotPicker value={proposedAt} onChange={setProposedAt} />}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeclineOpen(false)} disabled={busy}>
               Cancelar
             </Button>
-            <Button variant="destructive" onClick={decline} disabled={busy}>
+            <Button variant={proposing ? "default" : "destructive"} onClick={decline} disabled={busy || (proposing && !proposedAt)}>
               {busy && <Loader2 className="animate-spin" aria-hidden />}
-              Rechazar solicitud
+              {proposing ? (proposedAt ? `Proponer ${formatDateTime(proposedAt)}` : "Elige una hora") : "Rechazar solicitud"}
             </Button>
           </DialogFooter>
         </DialogContent>

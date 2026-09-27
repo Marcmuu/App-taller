@@ -13,30 +13,31 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useData, useSessionUserId } from "@/lib/data/hooks";
-import { resetMockDatabase, setSessionUserId } from "@/lib/mock/store";
+import { resetDemoData, switchDemoUser } from "@/lib/data/actions";
+import { DEMO_MODE } from "@/lib/data/backend";
+import { useSessionUserId } from "@/lib/data/hooks";
+import { DEMO_PEOPLE } from "@/lib/mock/seed";
 import { cn } from "@/lib/utils";
 
 /**
- * Herramienta solo para la fase con datos falsos: cambiar de usuario al vuelo
- * y reiniciar la BBDD de prueba. Se elimina al conectar Supabase.
+ * Herramienta de la demo: cambiar de cuenta al vuelo y reiniciar los datos
+ * de prueba. No aparece cuando la instalación no está en modo demo.
  */
 export function DemoSwitcher({ className }: { className?: string }) {
   const router = useRouter();
   const currentId = useSessionUserId();
-  const accounts = useData((s) =>
-    s.auth_users.flatMap((u) => {
-      const profile = s.db.profiles.find((p) => p.id === u.id);
-      return profile ? [{ ...profile, email: u.email }] : [];
-    }),
-  );
+  if (!DEMO_MODE) return null;
 
-  const staff = accounts.filter((a) => a.role !== "customer");
-  const customers = accounts.filter((a) => a.role === "customer");
+  const staff = DEMO_PEOPLE.filter((a) => a.role !== "customer");
+  const customers = DEMO_PEOPLE.filter((a) => a.role === "customer");
 
-  const switchTo = (id: string, isStaff: boolean) => {
-    setSessionUserId(id);
-    router.replace(isStaff ? "/taller" : "/app");
+  const switchTo = async (id: string, isStaff: boolean) => {
+    try {
+      await switchDemoUser(id);
+      router.replace(isStaff ? "/taller" : "/app");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo cambiar de cuenta");
+    }
   };
 
   return (
@@ -55,21 +56,19 @@ export function DemoSwitcher({ className }: { className?: string }) {
         <DropdownMenuLabel>Entrar como… (datos de prueba)</DropdownMenuLabel>
         <DropdownMenuGroup>
           {staff.map((a) => (
-            <DropdownMenuItem key={a.id} onSelect={() => switchTo(a.id, true)} disabled={a.id === currentId}>
+            <DropdownMenuItem key={a.id} onSelect={() => void switchTo(a.id, true)} disabled={a.id === currentId}>
               <Wrench aria-hidden />
-              <span className="truncate">{a.full_name}</span>
-              <span className="ml-auto text-xs text-muted-foreground">
-                {a.role === "workshop_admin" ? "Admin" : "Mecánico"}
-              </span>
+              <span className="truncate">{a.name}</span>
+              <span className="ml-auto text-xs text-muted-foreground">{a.role === "workshop_admin" ? "Admin" : "Mecánico"}</span>
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           {customers.map((a) => (
-            <DropdownMenuItem key={a.id} onSelect={() => switchTo(a.id, false)} disabled={a.id === currentId}>
+            <DropdownMenuItem key={a.id} onSelect={() => void switchTo(a.id, false)} disabled={a.id === currentId}>
               <UserRound aria-hidden />
-              <span className="truncate">{a.full_name}</span>
+              <span className="truncate">{a.name}</span>
               <span className="ml-auto text-xs text-muted-foreground">Cliente</span>
             </DropdownMenuItem>
           ))}
@@ -77,9 +76,13 @@ export function DemoSwitcher({ className }: { className?: string }) {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           variant="destructive"
-          onSelect={() => {
-            resetMockDatabase();
-            toast.success("Datos de prueba reiniciados");
+          onSelect={async () => {
+            try {
+              await resetDemoData();
+              toast.success("Datos de prueba reiniciados");
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "No se pudo reiniciar");
+            }
           }}
         >
           <RotateCcw aria-hidden />

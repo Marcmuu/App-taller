@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { card, loginAs } from "./helpers";
 
 test.describe("Flujo de reparación", () => {

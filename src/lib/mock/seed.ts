@@ -35,7 +35,7 @@ import type { MockAuthUser, MockState, StorageObject } from "./types";
 export const DEMO_PASSWORD = "demo1234";
 
 /** Súbelo cuando cambie la forma de los datos para regenerar el seed guardado. */
-export const MOCK_SCHEMA_VERSION = 3;
+export const MOCK_SCHEMA_VERSION = 5;
 
 /** uuid v4 válido y determinista: sid(2, 7) → 00000000-0000-4000-8002-000000000007 */
 function sid(table: number, n: number): string {
@@ -56,6 +56,27 @@ export const IDS = {
   jorge: sid(2, 17),
   nuria: sid(2, 18),
 } as const;
+
+/** Cuentas demo (contraseña: DEMO_PASSWORD). */
+export const DEMO_PEOPLE: Array<{
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: Database["profiles"][number]["role"];
+}> = [
+  { id: IDS.admin, name: "Laura Martínez", email: "laura@tallerdemo.es", phone: "+34 600 100 001", role: "workshop_admin" },
+  { id: IDS.mechanic1, name: "Javier Ruiz", email: "javier@tallerdemo.es", phone: "+34 600 100 002", role: "mechanic" },
+  { id: IDS.mechanic2, name: "Pablo Sánchez", email: "pablo@tallerdemo.es", phone: "+34 600 100 003", role: "mechanic" },
+  { id: IDS.carlos, name: "Carlos López", email: "carlos@demo.es", phone: "+34 611 222 333", role: "customer" },
+  { id: IDS.ana, name: "Ana García", email: "ana@demo.es", phone: "+34 622 333 444", role: "customer" },
+  { id: IDS.marta, name: "Marta Fernández", email: "marta@demo.es", phone: "+34 633 444 555", role: "customer" },
+  { id: IDS.david, name: "David Romero", email: "david@demo.es", phone: "+34 644 555 666", role: "customer" },
+  { id: IDS.lucia, name: "Lucía Navarro", email: "lucia@demo.es", phone: "+34 655 666 777", role: "customer" },
+  { id: IDS.sergio, name: "Sergio Gil", email: "sergio@demo.es", phone: "+34 666 777 888", role: "customer" },
+  { id: IDS.jorge, name: "Jorge Díaz", email: "jorge@demo.es", phone: "+34 677 888 999", role: "customer" },
+  { id: IDS.nuria, name: "Nuria Vidal", email: "nuria@demo.es", phone: "+34 688 999 000", role: "customer" },
+];
 
 export function createSeed(now: Date = new Date()): MockState {
   const at = (dayOffset: number, hhmm: string): string => {
@@ -101,32 +122,17 @@ export function createSeed(now: Date = new Date()): MockState {
       phone: "+34 912 345 678",
       email: "hola@tallermartinez.es",
       address: "Calle de la Industria 24, 28045 Madrid",
+      review_url: "https://www.google.com/maps/search/?api=1&query=Taller+Mart%C3%ADnez+Madrid",
+      timezone: "Europe/Madrid",
       created_at: created,
     },
   ];
 
-  const people: Array<{
-    id: string;
-    name: string;
-    email: string;
-    phone: string;
-    role: Database["profiles"][number]["role"];
-  }> = [
-    { id: IDS.admin, name: "Laura Martínez", email: "laura@tallerdemo.es", phone: "+34 600 100 001", role: "workshop_admin" },
-    { id: IDS.mechanic1, name: "Javier Ruiz", email: "javier@tallerdemo.es", phone: "+34 600 100 002", role: "mechanic" },
-    { id: IDS.mechanic2, name: "Pablo Sánchez", email: "pablo@tallerdemo.es", phone: "+34 600 100 003", role: "mechanic" },
-    { id: IDS.carlos, name: "Carlos López", email: "carlos@demo.es", phone: "+34 611 222 333", role: "customer" },
-    { id: IDS.ana, name: "Ana García", email: "ana@demo.es", phone: "+34 622 333 444", role: "customer" },
-    { id: IDS.marta, name: "Marta Fernández", email: "marta@demo.es", phone: "+34 633 444 555", role: "customer" },
-    { id: IDS.david, name: "David Romero", email: "david@demo.es", phone: "+34 644 555 666", role: "customer" },
-    { id: IDS.lucia, name: "Lucía Navarro", email: "lucia@demo.es", phone: "+34 655 666 777", role: "customer" },
-    { id: IDS.sergio, name: "Sergio Gil", email: "sergio@demo.es", phone: "+34 666 777 888", role: "customer" },
-    { id: IDS.jorge, name: "Jorge Díaz", email: "jorge@demo.es", phone: "+34 677 888 999", role: "customer" },
-    { id: IDS.nuria, name: "Nuria Vidal", email: "nuria@demo.es", phone: "+34 688 999 000", role: "customer" },
-  ];
+  const people = DEMO_PEOPLE;
 
   const profiles: Database["profiles"] = people.map((p) => ({
     id: p.id,
+    email: p.email,
     full_name: p.name,
     phone: p.phone,
     role: p.role,
@@ -219,6 +225,7 @@ export function createSeed(now: Date = new Date()): MockState {
     cancelled_by: null,
     cancellation_reason: null,
     customer_dismissed_at: null,
+    proposed_at: null,
     created_at: createdAt,
   });
 
@@ -265,7 +272,8 @@ export function createSeed(now: Date = new Date()): MockState {
   const storage: Record<string, StorageObject> = {};
   const appointment_media: Database["appointment_media"] = [];
   const addMedia = (n: number, appointmentId: string, by: string, file: string, createdAt: string) => {
-    const path = `${W}/appointments/${appointmentId}/${sid(5, n)}.svg`;
+    // Imágenes de ejemplo en /public/mock (el prefijo demo/ lo entienden ambos backends)
+    const path = `demo/${file}`;
     storage[path] = { url: asset(`/mock/${file}`), mime_type: "image/svg+xml" };
     appointment_media.push({
       id: sid(5, n),
@@ -500,6 +508,7 @@ export function createSeed(now: Date = new Date()): MockState {
     repair_order_id: repairId,
     sender_id: sender,
     body,
+    attachment_path: null,
     created_at: createdAt,
     read_at: read ? createdAt : null,
   });

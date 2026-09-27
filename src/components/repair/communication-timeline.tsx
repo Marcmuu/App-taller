@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
+  Camera,
+  X,
   CalendarPlus,
   CircleCheck,
   CircleHelp,
@@ -16,6 +18,8 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { MediaError, prepareMedia, type PreparedMedia } from "@/lib/media";
 import { markMessagesRead, sendMessage } from "@/lib/data/actions";
 import { useData, useRequiredProfile } from "@/lib/data/hooks";
 import { getCommunicationTimeline, type ChatThread, type TimelineEntry } from "@/lib/data/queries";
@@ -104,14 +108,17 @@ function Entry({ entry, viewer }: { entry: TimelineEntry; viewer: Viewer }) {
       <div className={cn("flex", mine ? "justify-end" : "justify-start")}>
         <div className={cn("max-w-[85%] space-y-1", mine && "items-end text-right")}>
           {senderLabel && <p className="px-1 text-xs text-muted-foreground">{senderLabel}</p>}
-          <p
-            className={cn(
-              "whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-left text-[15px] leading-snug",
-              mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md border bg-card",
-            )}
-          >
-            {entry.message.body}
-          </p>
+          {entry.message.attachment_path && <ChatPhoto path={entry.message.attachment_path} mine={mine} />}
+          {entry.message.body && (
+            <p
+              className={cn(
+                "whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-left text-[15px] leading-snug",
+                mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md border bg-card",
+              )}
+            >
+              {entry.message.body}
+            </p>
+          )}
           <p className="px-1 text-[11px] text-muted-foreground">
             {formatTime(entry.at)}
             {mine && entry.message.read_at && <span className="ml-1 text-primary">· Visto</span>}
@@ -182,16 +189,49 @@ function SystemEvent({
   );
 }
 
+/** Foto adjunta en un mensaje (se amplía al tocarla). */
+function ChatPhoto({ path, mine }: { path: string; mine: boolean }) {
+  const url = useData((s) => s.storage[path]?.url ?? null);
+  const [open, setOpen] = useState(false);
+  if (!url) {
+    return <div className={cn("h-40 w-56 animate-pulse rounded-2xl bg-muted", mine && "ml-auto")} aria-label="Cargando foto" />;
+  }
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={cn("block overflow-hidden rounded-2xl border", mine && "ml-auto")}
+        aria-label="Ver foto"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- URL firmada de Storage / data URL */}
+        <img src={url} alt="Foto enviada" className="max-h-64 w-auto max-w-full object-cover" />
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-3xl p-2">
+          <DialogTitle className="sr-only">Foto</DialogTitle>
+          {/* eslint-disable-next-line @next/next/no-img-element -- URL firmada de Storage / data URL */}
+          <img src={url} alt="Foto enviada" className="max-h-[80vh] w-full rounded-lg object-contain" />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function Composer({ thread }: { thread: ChatThread }) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
+  const [photo, setPhoto] = useState<PreparedMedia | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const submit = async () => {
-    if (!body.trim()) return;
+    if (!body.trim() && !photo) return;
     setSending(true);
     try {
-      await sendMessage(thread, body);
+      await sendMessage(thread, body, photo);
       setBody("");
+      setPhoto(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo enviar");
     } finally {
@@ -199,14 +239,65 @@ function Composer({ thread }: { thread: ChatThread }) {
     }
   };
 
+  const pick = async (file: File | undefined) => {
+    if (!file) return;
+    setPreparing(true);
+    try {
+      const media = await prepareMedia(file);
+      if (media.mediaType !== "image") throw new MediaError("En el chat solo se pueden enviar fotos.");
+      setPhoto(media);
+    } catch (error) {
+      toast.error(error instanceof MediaError ? error.message : "No se pudo añadir la foto.");
+    } finally {
+      setPreparing(false);
+    }
+  };
+
   return (
     <form
-      className="sticky bottom-0 mt-4 flex items-end gap-2 border-t bg-background/95 py-3 backdrop-blur pb-safe"
+      className="sticky bottom-0 mt-4 space-y-2 border-t bg-background/95 py-3 backdrop-blur pb-safe"
       onSubmit={(e) => {
         e.preventDefault();
         void submit();
       }}
     >
+      {photo && (
+        <div className="relative w-fit">
+          {/* eslint-disable-next-line @next/next/no-img-element -- vista previa local */}
+          <img src={photo.dataUrl} alt="Foto para enviar" className="h-20 w-auto rounded-xl border object-cover" />
+          <button
+            type="button"
+            onClick={() => setPhoto(null)}
+            className="absolute -right-2 -top-2 grid size-6 place-items-center rounded-full bg-black/70 text-white"
+            aria-label="Quitar foto"
+          >
+            <X className="size-3.5" aria-hidden />
+          </button>
+        </div>
+      )}
+      <div className="flex items-end gap-2">
+      <input
+        ref={fileInput}
+        type="file"
+        accept="image/*"
+        hidden
+        aria-label="Adjuntar foto"
+        onChange={(e) => {
+          void pick(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-lg"
+        className="size-11 shrink-0 rounded-full text-muted-foreground"
+        onClick={() => fileInput.current?.click()}
+        disabled={preparing || sending}
+        aria-label="Adjuntar foto"
+      >
+        {preparing ? <Loader2 className="animate-spin" aria-hidden /> : <Camera aria-hidden />}
+      </Button>
       <Textarea
         value={body}
         onChange={(e) => setBody(e.target.value)}
@@ -222,9 +313,10 @@ function Composer({ thread }: { thread: ChatThread }) {
         maxLength={2000}
         className="max-h-32 min-h-11 resize-none text-base"
       />
-      <Button type="submit" size="icon-lg" className="size-11 shrink-0 rounded-full" disabled={sending || !body.trim()} aria-label="Enviar">
+      <Button type="submit" size="icon-lg" className="size-11 shrink-0 rounded-full" disabled={sending || (!body.trim() && !photo)} aria-label="Enviar">
         {sending ? <Loader2 className="animate-spin" aria-hidden /> : <SendHorizontal aria-hidden />}
       </Button>
+      </div>
     </form>
   );
 }

@@ -10,16 +10,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signIn } from "@/lib/data/actions";
-import { useCurrentProfile, useMockState } from "@/lib/data/hooks";
+import { useCurrentProfile } from "@/lib/data/hooks";
 import Link from "next/link";
-import { DEMO_PASSWORD } from "@/lib/mock/seed";
+import { DEMO_PASSWORD, DEMO_PEOPLE } from "@/lib/mock/seed";
+import { DEMO_MODE } from "@/lib/data/backend";
 import { loginSchema, type LoginInput } from "@/lib/validators";
 import { initials } from "@/lib/format";
 
 export function LoginForm() {
   const router = useRouter();
   const area = useSearchParams().get("tipo") === "cliente" ? "customer" : "workshop";
-  const state = useMockState();
   const current = useCurrentProfile();
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -36,14 +36,12 @@ export function LoginForm() {
     }
   });
 
-  const demoAccounts =
-    state?.auth_users.flatMap((u) => {
-      const profile = state.db.profiles.find((p) => p.id === u.id);
-      if (!profile) return [];
-      const isStaff = profile.role !== "customer";
-      if ((area === "workshop") !== isStaff) return [];
-      return [{ email: u.email, profile }];
-    }) ?? [];
+  const demoAccounts = DEMO_MODE
+    ? DEMO_PEOPLE.filter((p) => (area === "workshop") === (p.role !== "customer")).map((p) => ({
+        email: p.email,
+        profile: { full_name: p.name, role: p.role },
+      }))
+    : [];
 
   const fillDemo = (email: string) => {
     form.setValue("email", email, { shouldValidate: true });

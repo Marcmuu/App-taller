@@ -35,7 +35,7 @@ export default function WorkshopRepairDetailPage() {
     if (!view || view.repair.workshop_id !== profile.workshop_id) return null;
     return {
       view,
-      email: s.auth_users.find((u) => u.id === view.customer.id)?.email ?? null,
+      email: view.customer.email || null,
       media: getAppointmentMedia(s, view.repair.appointment_id),
       history: getRepairHistory(s.db, repairId).map((h) => ({ ...h, actor: getProfile(s.db, h.changed_by) })),
       estimateLines: view.estimate ? getEstimateItems(s.db, view.estimate.id).length : 0,

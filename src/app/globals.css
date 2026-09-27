@@ -136,3 +136,32 @@
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* Hoja A4 de tarjetas QR (/taller/negocio): 2 × 5 tarjetas de 85 × 55 mm con guías de corte. */
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+  html,
+  body {
+    background: white !important;
+  }
+  .qr-sheet {
+    grid-template-columns: repeat(2, 85mm);
+    grid-auto-rows: 55mm;
+    justify-content: center;
+    gap: 0;
+  }
+  .qr-sheet > * {
+    width: 85mm;
+    outline: 0.2mm dashed #9ca3af;
+    outline-offset: -0.1mm;
+  }
+  .qr-card {
+    height: 55mm;
+    aspect-ratio: auto;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

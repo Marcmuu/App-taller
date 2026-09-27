@@ -41,6 +41,7 @@ const appt = (date: Date, status: Appointment["status"] = "confirmed"): Appointm
   cancelled_by: null,
   cancellation_reason: null,
   customer_dismissed_at: null,
+  proposed_at: null,
   created_at: NOW.toISOString(),
 });
 

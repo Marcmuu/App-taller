@@ -6,7 +6,7 @@ import { BookOpen, CarFront, Monitor, RotateCcw, Smartphone, Wrench } from "luci
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/brand/logo";
-import { resetMockDatabase } from "@/lib/mock/store";
+import { resetDemoData } from "@/lib/data/actions";
 import { asset } from "@/lib/routes";
 
 /**
@@ -18,11 +18,15 @@ export function DemoStage() {
   // Cambiar la key recarga ambos iframes (volver al login).
   const [round, setRound] = useState(0);
 
-  const restart = () => {
-    resetMockDatabase();
-    window.sessionStorage.clear();
-    setRound((r) => r + 1);
-    toast.success("Demo reiniciada");
+  const restart = async () => {
+    try {
+      await resetDemoData();
+      window.sessionStorage.clear();
+      setRound((r) => r + 1);
+      toast.success("Demo reiniciada");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo reiniciar la demo");
+    }
   };
 
   return (

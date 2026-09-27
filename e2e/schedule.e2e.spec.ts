@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures";
 import { differenceInCalendarWeeks, format } from "date-fns";
 import { dateIn, dayCell, loginAs, nextDowOffset, weekdayOffset, wizardToSlot } from "./helpers";
 
