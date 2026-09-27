@@ -96,10 +96,33 @@ export function getRepairHistory(db: Database, repairId: string): RepairStatusHi
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
 }
 
-export function getMessages(db: Database, repairId: string): Message[] {
+/**
+ * Una conversación es la de un cliente con el taller: la general (sin
+ * reparación, repairId null) o la de cada reparación.
+ */
+export interface ChatThread {
+  customerId: string;
+  repairId: string | null;
+}
+
+export function inThread(message: Message, thread: ChatThread): boolean {
+  return message.customer_id === thread.customerId && message.repair_order_id === thread.repairId;
+}
+
+export function getMessages(db: Database, thread: ChatThread): Message[] {
   return db.messages
-    .filter((m) => m.repair_order_id === repairId)
+    .filter((m) => inThread(m, thread))
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
+}
+
+export function isStaffMessage(db: Database, message: Message): boolean {
+  const sender = getProfile(db, message.sender_id);
+  return sender ? sender.role !== "customer" : false;
+}
+
+/** Mensajes sin leer de la otra parte en una conversación. */
+export function countUnread(db: Database, thread: ChatThread, readerIsStaff: boolean): number {
+  return db.messages.filter((m) => inThread(m, thread) && !m.read_at && isStaffMessage(db, m) !== readerIsStaff).length;
 }
 
 export function getAppointmentMedia(state: MockState, appointmentId: string | null): MediaView[] {
@@ -110,13 +133,8 @@ export function getAppointmentMedia(state: MockState, appointmentId: string | nu
     .filter((m) => m.url);
 }
 
-function unreadFor(db: Database, repairId: string, readerIsStaff: boolean): number {
-  return db.messages.filter((m) => {
-    if (m.repair_order_id !== repairId || m.read_at) return false;
-    const sender = getProfile(db, m.sender_id);
-    const senderIsStaff = sender ? sender.role !== "customer" : false;
-    return senderIsStaff !== readerIsStaff;
-  }).length;
+function unreadFor(db: Database, repair: RepairOrder, readerIsStaff: boolean): number {
+  return countUnread(db, { customerId: repair.customer_id, repairId: repair.id }, readerIsStaff);
 }
 
 function toRepairView(db: Database, repair: RepairOrder, readerIsStaff: boolean): RepairView | null {
@@ -129,7 +147,7 @@ function toRepairView(db: Database, repair: RepairOrder, readerIsStaff: boolean)
     customer,
     appointment: db.appointments.find((a) => a.id === repair.appointment_id) ?? null,
     estimate: getLatestEstimate(db, repair.id, { includeDrafts: readerIsStaff }),
-    unreadMessages: unreadFor(db, repair.id, readerIsStaff),
+    unreadMessages: unreadFor(db, repair, readerIsStaff),
   };
 }
 
@@ -173,20 +191,79 @@ export function getWorkshopBoard(state: MockState, workshopId: string) {
   return { requests, repairs };
 }
 
-/** Conversaciones del taller: reparaciones con actividad, la más reciente primero. */
-export function getWorkshopConversations(db: Database, workshopId: string) {
-  return db.repair_orders
+export interface Conversation {
+  key: string;
+  thread: ChatThread;
+  customer: Profile;
+  /** null en la consulta general. */
+  repair: RepairOrder | null;
+  vehicle: Vehicle | null;
+  lastMessage: Message | null;
+  lastActivity: string;
+  unreadMessages: number;
+}
+
+export function threadKey(thread: ChatThread): string {
+  return thread.repairId ?? `general-${thread.customerId}`;
+}
+
+function buildConversation(db: Database, thread: ChatThread, readerIsStaff: boolean): Conversation | null {
+  const customer = getProfile(db, thread.customerId);
+  if (!customer) return null;
+  const repair = thread.repairId ? db.repair_orders.find((r) => r.id === thread.repairId) ?? null : null;
+  const vehicle = repair ? db.vehicles.find((v) => v.id === repair.vehicle_id) ?? null : null;
+  const messages = getMessages(db, thread);
+  const lastMessage = messages.at(-1) ?? null;
+  const lastActivity = [repair?.updated_at ?? "", lastMessage?.created_at ?? ""].sort().at(-1) ?? "";
+  return {
+    key: threadKey(thread),
+    thread,
+    customer,
+    repair,
+    vehicle,
+    lastMessage,
+    lastActivity,
+    unreadMessages: countUnread(db, thread, readerIsStaff),
+  };
+}
+
+/** Conversaciones del taller: consultas generales y reparaciones, la más reciente primero. */
+export function getWorkshopConversations(db: Database, workshopId: string): Conversation[] {
+  const repairThreads = db.repair_orders
     .filter((r) => r.workshop_id === workshopId)
-    .map((r) => {
-      const view = toRepairView(db, r, true);
-      if (!view) return null;
-      const messages = getMessages(db, r.id);
-      const lastMessage = messages[messages.length - 1] ?? null;
-      const lastActivity = [r.updated_at, lastMessage?.created_at ?? ""].sort().at(-1) ?? r.updated_at;
-      return { ...view, lastMessage, lastActivity };
-    })
-    .filter((c): c is NonNullable<typeof c> => c !== null)
+    .map((r) => ({ customerId: r.customer_id, repairId: r.id }));
+  const generalCustomers = new Set(
+    db.messages.filter((m) => m.workshop_id === workshopId && m.repair_order_id === null).map((m) => m.customer_id),
+  );
+  const generalThreads = [...generalCustomers].map((customerId) => ({ customerId, repairId: null }));
+  return [...generalThreads, ...repairThreads]
+    .map((t) => buildConversation(db, t, true))
+    .filter((c): c is Conversation => c !== null)
+    // Las reparaciones cerradas solo aparecen si hubo mensajes
+    .filter((c) => c.lastMessage !== null || c.repair?.current_status !== "closed")
     .sort((a, b) => b.lastActivity.localeCompare(a.lastActivity));
+}
+
+/** Conversaciones del cliente: la general (siempre) y la de cada reparación. */
+export function getCustomerConversations(db: Database, customerId: string): Conversation[] {
+  const general = buildConversation(db, { customerId, repairId: null }, false);
+  const repairs = db.repair_orders
+    .filter((r) => r.customer_id === customerId)
+    .map((r) => buildConversation(db, { customerId, repairId: r.id }, false))
+    .filter((c): c is Conversation => c !== null)
+    // Las cerradas solo si hubo mensajes
+    .filter((c) => c.repair?.current_status !== "closed" || c.lastMessage !== null)
+    .sort((a, b) => b.lastActivity.localeCompare(a.lastActivity));
+  return general ? [general, ...repairs] : repairs;
+}
+
+/** Total de mensajes sin leer para un usuario (todas sus conversaciones). */
+export function countAllUnread(db: Database, profile: Profile): number {
+  const readerIsStaff = profile.role !== "customer";
+  return db.messages.filter((m) => {
+    if (m.read_at || isStaffMessage(db, m) === readerIsStaff) return false;
+    return readerIsStaff ? m.workshop_id === profile.workshop_id : m.customer_id === profile.id;
+  }).length;
 }
 
 // ---------------------------------------------------------------------------
@@ -215,6 +292,15 @@ export function getCustomerHome(db: Database, customerId: string) {
       vehicle: db.vehicles.find((v) => v.id === appointment.vehicle_id) ?? null,
     }));
 
+  // Solicitudes que el taller no pudo atender: el cliente puede elegir otra hora.
+  const declinedRequests = db.appointments
+    .filter((a) => a.customer_id === customerId && a.status === "cancelled" && a.cancelled_by === "workshop" && !a.customer_dismissed_at)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .map((appointment) => ({
+      appointment,
+      vehicle: db.vehicles.find((v) => v.id === appointment.vehicle_id) ?? null,
+    }));
+
   // Próxima cita confirmada cuyo coche aún no ha llegado.
   const nextAppointment =
     activeRepairs
@@ -232,6 +318,7 @@ export function getCustomerHome(db: Database, customerId: string) {
   return {
     activeRepairs,
     pendingRequests,
+    declinedRequests,
     nextAppointment,
     pastRepairs,
     hasVehicles: db.vehicles.some((v) => v.customer_id === customerId),
@@ -260,7 +347,19 @@ export type TimelineEntry =
     }
   | { kind: "appointment"; id: string; at: string; appointment: Appointment };
 
-export function getCommunicationTimeline(db: Database, repairId: string): TimelineEntry[] {
+export function getCommunicationTimeline(db: Database, thread: ChatThread): TimelineEntry[] {
+  const messageEntries = (): TimelineEntry[] =>
+    getMessages(db, thread).map((message) => ({
+      kind: "message",
+      id: `m-${message.id}`,
+      at: message.created_at,
+      message,
+      sender: getProfile(db, message.sender_id),
+    }));
+
+  // Consulta general: solo mensajes.
+  if (!thread.repairId) return messageEntries();
+  const repairId = thread.repairId;
   const repair = db.repair_orders.find((r) => r.id === repairId);
   if (!repair) return [];
 
@@ -298,10 +397,7 @@ export function getCommunicationTimeline(db: Database, repairId: string): Timeli
     }
   }
 
-  for (const message of getMessages(db, repairId)) {
-    entries.push({ kind: "message", id: `m-${message.id}`, at: message.created_at, message, sender: getProfile(db, message.sender_id) });
-  }
-
+  entries.push(...messageEntries());
   return entries.sort((a, b) => a.at.localeCompare(b.at));
 }
 

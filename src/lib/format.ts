@@ -51,13 +51,6 @@ export function vehicleName(vehicle: Pick<Vehicle, "make" | "model">): string {
   return `${vehicle.make} ${vehicle.model}`;
 }
 
-/** Normaliza matrícula española: "1234abc" → "1234 ABC". */
-export function formatPlate(plate: string): string {
-  const clean = plate.replace(/[\s-]/g, "").toUpperCase();
-  const match = clean.match(/^(\d{4})([A-Z]{3})$/);
-  return match ? `${match[1]} ${match[2]}` : clean;
-}
-
 export function initials(name: string): string {
   return name
     .split(" ")

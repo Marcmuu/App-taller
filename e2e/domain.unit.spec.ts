@@ -10,6 +10,7 @@ import {
 } from "@/lib/domain/estimate";
 import { getNextRepairAction, getCustomerStatusCopy } from "@/lib/domain/repair-status";
 import { summarizeDay, toScheduleInput, validateSchedule } from "@/lib/domain/schedule";
+import { plateKey, validatePlate } from "@/lib/domain/plates";
 import type { Appointment, WorkshopAvailability, WorkshopClosure } from "@/types/database";
 
 // Lunes 5 de octubre de 2026, 08:00 (hora local del proceso).
@@ -37,6 +38,9 @@ const appt = (date: Date, status: Appointment["status"] = "confirmed"): Appointm
   issue_category: "averia",
   issue_description: null,
   drivable_status: "yes",
+  cancelled_by: null,
+  cancellation_reason: null,
+  customer_dismissed_at: null,
   created_at: NOW.toISOString(),
 });
 
@@ -126,10 +130,12 @@ test.describe("Siguiente acción del taller", () => {
     expect(getNextRepairAction("diagnosis").type).toBe("open_estimate");
     expect(getNextRepairAction("estimate_pending", { estimateStatus: "sent" }).type).toBe("wait_customer");
     expect(getNextRepairAction("estimate_pending", { estimateStatus: "accepted" }).nextStatus).toBe("repair_in_progress");
-    expect(getNextRepairAction("repair_in_progress").nextStatus).toBe("repair_completed");
-    expect(getNextRepairAction("repair_completed").nextStatus).toBe("ready_for_pickup");
+    // Terminar es un solo clic: pasa directamente a "listo para recoger"
+    expect(getNextRepairAction("repair_in_progress").nextStatus).toBe("ready_for_pickup");
     const close = getNextRepairAction("ready_for_pickup");
-    expect(close).toMatchObject({ nextStatus: "closed", requiresConfirmation: true });
+    expect(close).toMatchObject({ nextStatus: "closed", requiresConfirmation: false });
+    // En diagnóstico se puede reparar sin presupuesto (trabajo ya pactado), con confirmación
+    expect(getNextRepairAction("diagnosis").secondary).toMatchObject({ nextStatus: "repair_in_progress", requiresConfirmation: true, withoutEstimate: true });
     expect(getNextRepairAction("closed").type).toBe("none");
   });
 
@@ -168,5 +174,39 @@ test.describe("Reglas del presupuesto", () => {
       tax_amount: 25.96,
       total: 149.56,
     });
+  });
+});
+
+test.describe("Matrículas", () => {
+  test("España: 4 números y 3 consonantes, se normaliza", () => {
+    expect(validatePlate("1234bcd", "es")).toEqual({ ok: true, plate: "1234 BCD" });
+    expect(validatePlate(" 1234-bcd ", "es")).toEqual({ ok: true, plate: "1234 BCD" });
+    const vowels = validatePlate("1234 ABC", "es");
+    expect(vowels.ok).toBe(false);
+    expect(!vowels.ok && vowels.error).toMatch(/no llevan vocales/);
+    expect(validatePlate("123 BCD", "es").ok).toBe(false);
+    expect(validatePlate("1234 BCDF", "es").ok).toBe(false);
+    expect(validatePlate("1234 BÑD", "es").ok).toBe(false);
+    expect(validatePlate("1234 QRS", "es").ok).toBe(false);
+  });
+
+  test("España antigua: provincia válida", () => {
+    expect(validatePlate("m-1234-ab", "es_old")).toEqual({ ok: true, plate: "M 1234 AB" });
+    expect(validatePlate("B 5678 C", "es_old")).toEqual({ ok: true, plate: "B 5678 C" });
+    expect(validatePlate("XX 1234 AB", "es_old").ok).toBe(false);
+  });
+
+  test("otros países", () => {
+    expect(validatePlate("ab12cd", "pt")).toEqual({ ok: true, plate: "AB-12-CD" });
+    expect(validatePlate("ab123cd", "fr")).toEqual({ ok: true, plate: "AB-123-CD" });
+    expect(validatePlate("ab123cd", "it")).toEqual({ ok: true, plate: "AB 123 CD" });
+    expect(validatePlate("b ab 1234", "de")).toEqual({ ok: true, plate: "B AB 1234" });
+    expect(validatePlate("bab1234", "de").ok).toBe(false); // en Alemania hacen falta los espacios
+    expect(validatePlate("xyz-987", "other")).toEqual({ ok: true, plate: "XYZ987" });
+    expect(validatePlate("", "other").ok).toBe(false);
+  });
+
+  test("clave sin separadores para detectar duplicados", () => {
+    expect(plateKey("1234 BCD")).toBe(plateKey("1234-bcd"));
   });
 });

@@ -4,7 +4,7 @@ import {
   ESTIMATE_ITEM_TYPES,
 } from "@/types/database";
 import { ISSUE_CATEGORIES } from "@/lib/domain/appointments";
-import { formatPlate } from "@/lib/format";
+import { validatePlate } from "@/lib/domain/plates";
 
 export const loginSchema = z.object({
   email: z.email("Escribe un email válido"),
@@ -25,24 +25,30 @@ export type SignupInput = z.infer<typeof signupSchema>;
 
 const currentYear = new Date().getFullYear();
 
-export const vehicleSchema = z.object({
-  license_plate: z
-    .string()
-    .trim()
-    .min(4, "Escribe la matrícula")
-    .max(12, "Matrícula demasiado larga")
-    .transform(formatPlate),
-  make: z.string().trim().min(2, "Escribe la marca"),
-  model: z.string().trim().min(1, "Escribe el modelo"),
-  year: z
-    .string()
-    .trim()
-    .optional()
-    .transform((v) => (v ? Number(v) : null))
-    .refine((v) => v === null || (Number.isInteger(v) && v >= 1950 && v <= currentYear + 1), {
-      message: "Año no válido",
-    }),
-});
+export const vehicleSchema = z
+  .object({
+    plate_format: z.string().min(1),
+    license_plate: z.string().trim().max(15, "Matrícula demasiado larga"),
+    make: z.string().trim().min(2, "Escribe la marca"),
+    model: z.string().trim().min(1, "Escribe el modelo"),
+    year: z
+      .string()
+      .trim()
+      .optional()
+      .transform((v) => (v ? Number(v) : null))
+      .refine((v) => v === null || (Number.isInteger(v) && v >= 1950 && v <= currentYear + 1), {
+        message: "Año no válido",
+      }),
+  })
+  // La matrícula tiene que cumplir el formato del país elegido; se guarda normalizada.
+  .superRefine((v, ctx) => {
+    const check = validatePlate(v.license_plate, v.plate_format);
+    if (!check.ok) ctx.addIssue({ code: "custom", path: ["license_plate"], message: check.error });
+  })
+  .transform((v) => {
+    const check = validatePlate(v.license_plate, v.plate_format);
+    return { ...v, license_plate: check.ok ? check.plate : v.license_plate };
+  });
 export type VehicleFormValues = z.input<typeof vehicleSchema>;
 export type VehicleInput = z.output<typeof vehicleSchema>;
 

@@ -118,7 +118,7 @@ function NotificationsMenu() {
         {notifications.length === 0 && <p className="px-2 py-6 text-center text-sm text-muted-foreground">Sin avisos</p>}
         {notifications.map((n) => (
           <DropdownMenuItem key={n.id} asChild className="items-start">
-            <Link href={n.repair_order_id ? routes.workshopRepair(n.repair_order_id) : "/taller"}>
+            <Link href={n.repair_order_id ? routes.workshopRepair(n.repair_order_id) : n.type === "message" ? "/taller/communications" : "/taller"}>
               <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", n.read_at ? "bg-transparent" : "bg-primary")} aria-hidden />
               <span className="min-w-0">
                 <span className={cn("block text-sm", !n.read_at && "font-semibold")}>{n.title}</span>

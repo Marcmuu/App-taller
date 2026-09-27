@@ -3,13 +3,14 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, CarFront, House, UserRound } from "lucide-react";
+import { Bell, CarFront, House, MessageCircle, UserRound } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { AuthGuard, DataGate, FullPageLoader } from "@/components/shared/guards";
 import { DemoSwitcher } from "@/components/shared/demo-switcher";
 import { LiveNotifier } from "@/components/shared/live-notifier";
 import { useData, useRequiredProfile } from "@/lib/data/hooks";
-import { getDefaultWorkshop } from "@/lib/data/queries";
+import { countAllUnread, getDefaultWorkshop } from "@/lib/data/queries";
+import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -50,9 +51,11 @@ function Shell({ children }: { children: React.ReactNode }) {
 function TopBar() {
   const profile = useRequiredProfile();
   const workshop = useData((s) => getDefaultWorkshop(s.db));
+  // Los mensajes se cuentan en su propio icono; la campana, el resto de avisos.
   const unread = useData(
-    (s) => s.db.notifications.filter((n) => n.user_id === profile.id && !n.read_at).length,
+    (s) => s.db.notifications.filter((n) => n.user_id === profile.id && !n.read_at && n.type !== "message").length,
   );
+  const unreadMessages = useData((s) => countAllUnread(s.db, profile));
 
   return (
     <header className="sticky top-0 z-30 border-b bg-background/90 backdrop-blur">
@@ -60,6 +63,18 @@ function TopBar() {
         <Logo label={workshop.name} className="min-w-0 text-sm" />
         <div className="flex items-center gap-1">
           <DemoSwitcher />
+          <Link
+            href={routes.customerInbox()}
+            className="relative grid size-10 place-items-center rounded-full hover:bg-muted"
+            aria-label={unreadMessages > 0 ? `Mensajes (${unreadMessages} sin leer)` : "Mensajes"}
+          >
+            <MessageCircle className="size-5" aria-hidden />
+            {unreadMessages > 0 && (
+              <span className="absolute right-1.5 top-1.5 grid min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-4 text-primary-foreground">
+                {unreadMessages}
+              </span>
+            )}
+          </Link>
           <Link
             href="/app/notifications"
             className="relative grid size-10 place-items-center rounded-full hover:bg-muted"

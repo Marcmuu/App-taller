@@ -18,49 +18,52 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { markMessagesRead, sendMessage } from "@/lib/data/actions";
 import { useData, useRequiredProfile } from "@/lib/data/hooks";
-import { getCommunicationTimeline, type TimelineEntry } from "@/lib/data/queries";
+import { getCommunicationTimeline, type ChatThread, type TimelineEntry } from "@/lib/data/queries";
 import { REPAIR_STATUS_META } from "@/lib/domain/repair-status";
-import { formatCurrency, formatDateTime, formatDayLabel, formatTime } from "@/lib/format";
+import { formatCurrency, formatDayLabel, formatTime, formatWhen } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { routes } from "@/lib/routes";
 
 type Viewer = "customer" | "workshop";
 
 /**
- * Cronología de una reparación: mensajes, cambios de estado y presupuestos.
- * No es un chat completo: mensajes sencillos ligados a la reparación.
+ * Conversación entre cliente y taller. En una reparación mezcla mensajes,
+ * cambios de estado y presupuestos; en la consulta general, solo mensajes.
+ * La ven el cliente y todos los empleados del taller.
  */
 export function CommunicationTimeline({
-  repairId,
+  thread,
   viewer,
   className,
   showComposer = true,
 }: {
-  repairId: string;
+  thread: ChatThread;
   viewer: Viewer;
   className?: string;
   showComposer?: boolean;
 }) {
-  const entries = useData((s) => getCommunicationTimeline(s.db, repairId));
+  const { customerId, repairId } = thread;
+  const entries = useData((s) => getCommunicationTimeline(s.db, { customerId, repairId }));
   const bottomRef = useRef<HTMLDivElement>(null);
   const count = entries.length;
 
   // Al abrir o recibir algo nuevo: marcar como leído y bajar al final.
   // Si está dentro de un panel con scroll ([data-scroll]) solo se mueve ese panel.
   useEffect(() => {
-    markMessagesRead(repairId);
+    markMessagesRead({ customerId, repairId });
     const bottom = bottomRef.current;
     const panel = bottom?.closest<HTMLElement>("[data-scroll]");
     if (panel) panel.scrollTop = panel.scrollHeight;
     else bottom?.scrollIntoView({ block: "end" });
-  }, [repairId, count]);
+  }, [customerId, repairId, count]);
 
   return (
     <div className={cn("flex flex-col", className)}>
       <div className="flex-1 space-y-3">
         {entries.length === 0 && (
           <p className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-            <MessagesSquare className="size-4" aria-hidden /> Sin mensajes todavía
+            <MessagesSquare className="size-4" aria-hidden />
+            {viewer === "customer" ? "Escribe tu duda y el taller te responderá aquí" : "Sin mensajes todavía"}
           </p>
         )}
         {entries.map((entry, i) => {
@@ -77,7 +80,7 @@ export function CommunicationTimeline({
         })}
         <div ref={bottomRef} />
       </div>
-      {showComposer && <Composer repairId={repairId} />}
+      {showComposer && <Composer thread={{ customerId, repairId }} />}
     </div>
   );
 }
@@ -86,9 +89,11 @@ function Entry({ entry, viewer }: { entry: TimelineEntry; viewer: Viewer }) {
   const profile = useRequiredProfile();
 
   if (entry.kind === "message") {
-    const mine = entry.message.sender_id === profile.id;
     const fromWorkshop = entry.sender ? entry.sender.role !== "customer" : false;
-    const senderLabel = mine
+    // El taller es un equipo: sus mensajes van a la derecha aunque los escriba otro empleado.
+    const mine = viewer === "workshop" ? fromWorkshop : !fromWorkshop;
+    const byMe = entry.message.sender_id === profile.id;
+    const senderLabel = byMe
       ? null
       : viewer === "customer"
         ? `${entry.sender?.full_name.split(" ")[0] ?? "Taller"} · Taller`
@@ -107,7 +112,10 @@ function Entry({ entry, viewer }: { entry: TimelineEntry; viewer: Viewer }) {
           >
             {entry.message.body}
           </p>
-          <p className="px-1 text-[11px] text-muted-foreground">{formatTime(entry.at)}</p>
+          <p className="px-1 text-[11px] text-muted-foreground">
+            {formatTime(entry.at)}
+            {mine && entry.message.read_at && <span className="ml-1 text-primary">· Visto</span>}
+          </p>
         </div>
       </div>
     );
@@ -129,7 +137,7 @@ function Entry({ entry, viewer }: { entry: TimelineEntry; viewer: Viewer }) {
   if (entry.kind === "appointment") {
     return (
       <SystemEvent icon={<CalendarPlus className="size-3.5" aria-hidden />} at={entry.at}>
-        Cita solicitada para el <strong className="font-medium text-foreground">{formatDateTime(entry.appointment.scheduled_at)}</strong>
+        Cita solicitada para <strong className="font-medium text-foreground">{formatWhen(entry.appointment.scheduled_at)}</strong>
       </SystemEvent>
     );
   }
@@ -174,7 +182,7 @@ function SystemEvent({
   );
 }
 
-function Composer({ repairId }: { repairId: string }) {
+function Composer({ thread }: { thread: ChatThread }) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -182,7 +190,7 @@ function Composer({ repairId }: { repairId: string }) {
     if (!body.trim()) return;
     setSending(true);
     try {
-      await sendMessage(repairId, body);
+      await sendMessage(thread, body);
       setBody("");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo enviar");

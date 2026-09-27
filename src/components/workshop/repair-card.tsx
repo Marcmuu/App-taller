@@ -20,7 +20,7 @@ export function RepairCard({ view }: { view: RepairView }) {
     (estimate?.status === "question" || estimate?.status === "accepted");
   const rejected = repair.current_status === "estimate_pending" && estimate?.status === "rejected";
   const showEstimate =
-    repair.estimated_ready_at && ["repair_in_progress", "repair_completed"].includes(repair.current_status);
+    repair.estimated_ready_at && repair.current_status === "repair_in_progress";
 
   return (
     <article

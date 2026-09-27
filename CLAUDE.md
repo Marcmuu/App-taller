@@ -9,3 +9,4 @@
 - Si cambias la forma de los datos seed, sube `MOCK_SCHEMA_VERSION` en `src/lib/mock/seed.ts`.
 - Next.js 16: `params`/`searchParams` son Promises; `middleware` se llama `proxy`.
 - URLs con id: siempre vía `src/lib/routes.ts` (query params para que funcione la exportación estática de GitHub Pages, `npm run build:pages`).
+- Estados: se eliminó repair_completed (terminar = un clic a ready_for_pickup). Mensajes: la conversación es cliente+taller; repair_order_id null = consulta general. Las acciones escriben primero y luego simulan latencia (withLatency).

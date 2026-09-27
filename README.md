@@ -59,7 +59,8 @@ El trabajador debe poder actualizar el estado en menos de 5 segundos.
 | --- | --- |
 | A — Scaffold y design system | ✅ |
 | B — 15 pantallas con datos falsos | ✅ (flujo completo navegable) |
-| B+ — Calendario, capacidad por franja, festivos, fecha estimada, rechazados, registro | ✅ con 46 tests automáticos |
+| B+ — Calendario, capacidad por franja, festivos, fecha estimada, rechazados, registro | ✅ |
+| B++ — Matrículas por país, chat general cliente↔taller, estados simplificados, reprogramar citas rechazadas | ✅ con 57 tests automáticos |
 | C — Supabase (migraciones, RLS, seed) | ⏳ siguiente |
 | D — Autenticación real | ⏳ |
 | E — Flujos conectados a Supabase + Realtime | ⏳ (hoy funcionan sobre la BBDD falsa) |
@@ -102,6 +103,7 @@ Los tests usan Playwright y el **Chrome instalado** en el equipo (`channel: "chr
 | `e2e/booking.e2e.spec.ts` | Calendario del cliente, reserva con foto en directo, capacidad configurable, dos clientes a por la última plaza, anulaciones y rechazos de cita |
 | `e2e/repairs.e2e.spec.ts` | Flujo completo con fecha estimada y deshacer, rechazados y cambio de opinión, devolver sin reparar, consultas y versiones, borradores, mensajes |
 | `e2e/schedule.e2e.spec.ts` | Agenda semanal del taller, validación de tramos, cerrar días, festivos, franjas de 1 hora |
+| `e2e/chat-and-flow.e2e.spec.ts` | Matrículas por país y duplicados, chat general cliente↔taller entre cuentas, elegir otra fecha tras un rechazo, terminado en un clic, reparar sin presupuesto |
 
 ## Cuentas demo
 
@@ -128,7 +130,7 @@ Datos del calendario incluidos: mañana a las 10:00 la franja está llena (2/2),
 2. Cliente: *Solicitar cita* → vehículo → motivo → avería → foto → hora → enviar.
 3. Taller: la solicitud aparece sola arriba del dashboard → **CONFIRMAR CITA** → **MARCAR RECIBIDO** → **INICIAR DIAGNÓSTICO** → **CREAR PRESUPUESTO** → enviar.
 4. Cliente: *Ver presupuesto* → **ACEPTAR PRESUPUESTO** (o Rechazar / Consultar).
-5. Taller: **INICIAR REPARACIÓN** → **FINALIZAR REPARACIÓN** → **LISTO PARA RECOGER**.
+5. Taller: **INICIAR REPARACIÓN** → **TERMINADO · LISTO PARA RECOGER** (un clic) → **ENTREGADO AL CLIENTE**.
 6. Cliente: ve cada cambio al momento y la pantalla de recogida.
 
 El botón **Demo** (arriba a la derecha) permite cambiar de usuario al vuelo y **reiniciar los datos de prueba**.

@@ -58,11 +58,11 @@ test.describe("Calendario del cliente", () => {
     await expect(page.getByRole("heading", { name: "¡Solicitud enviada!" })).toBeVisible();
 
     // El taller la ve sin recargar
-    const request = card(staff, "5678 DEF").filter({ hasText: "CONFIRMAR CITA" });
+    const request = card(staff, "5678 DFG").filter({ hasText: "CONFIRMAR CITA" });
     await expect(request).toBeVisible();
     await expect(request.getByText("1 archivo")).toBeVisible();
     await request.getByRole("button", { name: "CONFIRMAR CITA" }).click();
-    await expect(card(staff, "5678 DEF").getByRole("button", { name: "MARCAR RECIBIDO" })).toBeVisible();
+    await expect(card(staff, "5678 DFG").getByRole("button", { name: "MARCAR RECIBIDO" })).toBeVisible();
 
     // El cliente la ve confirmada con su hora
     await page.getByRole("link", { name: "Volver al inicio" }).click();

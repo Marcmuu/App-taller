@@ -88,9 +88,10 @@ Enum:
 3. diagnosis
 4. estimate_pending
 5. repair_in_progress
-6. repair_completed
-7. ready_for_pickup
-8. closed
+6. ready_for_pickup
+7. closed
+
+> Cambio respecto al diseño inicial: se eliminó `repair_completed`. Al terminar la reparación el coche pasa directamente a `ready_for_pickup` (un clic menos para el taller). `repair_orders.completed_at` se rellena en ese momento.
 
 Opcional:
 - cancelled

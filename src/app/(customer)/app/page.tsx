@@ -5,6 +5,7 @@ import { CalendarPlus, CarFront, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ActiveRepairCard } from "@/components/customer/active-repair-card";
 import { PendingRequest } from "@/components/customer/pending-request";
+import { DeclinedRequest } from "@/components/customer/declined-request";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/repair/status-badge";
 import { useData, useRequiredProfile } from "@/lib/data/hooks";
@@ -16,7 +17,7 @@ export default function CustomerHomePage() {
   const profile = useRequiredProfile();
   const home = useData((s) => getCustomerHome(s.db, profile.id));
   const firstName = profile.full_name.split(" ")[0];
-  const hasActivity = home.activeRepairs.length > 0 || home.pendingRequests.length > 0;
+  const hasActivity = home.activeRepairs.length > 0 || home.pendingRequests.length > 0 || home.declinedRequests.length > 0;
 
   return (
     <div className="space-y-6 pt-4">
@@ -35,6 +36,14 @@ export default function CustomerHomePage() {
         />
       ) : (
         <>
+          {home.declinedRequests.length > 0 && (
+            <section className="space-y-3" aria-label="Solicitudes que el taller no pudo atender">
+              {home.declinedRequests.map(({ appointment, vehicle }) => (
+                <DeclinedRequest key={appointment.id} appointment={appointment} vehicle={vehicle} />
+              ))}
+            </section>
+          )}
+
           {home.activeRepairs.length > 0 && (
             <section className="space-y-3" aria-label="Tus coches en el taller">
               {home.activeRepairs.map((view) => (

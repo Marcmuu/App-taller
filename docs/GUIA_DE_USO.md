@@ -38,8 +38,9 @@ La demo trae **datos de prueba** (un taller, empleados, clientes, coches en todo
 | Ana García | Cliente | Renault Clio en reparación (con fecha estimada) + cita solicitada |
 | Marta Fernández | Cliente | Peugeot 308 listo para recoger + cita el sábado |
 | David Romero | Cliente | Ford Focus con el presupuesto **rechazado** |
-| Jorge Díaz | Cliente | Audi A3 terminado + cita confirmada mañana |
-| Nuria Vidal | Cliente | Recién registrada, sin coches |
+| Jorge Díaz | Cliente | Audi A3 en reparación + cita confirmada mañana |
+| Sergio Gil | Cliente | BMW recibido + una solicitud que el taller **no pudo atender** (para elegir otra fecha) |
+| Nuria Vidal | Cliente | Recién registrada, sin coches, con una **consulta general** al taller |
 
 Situaciones del calendario ya preparadas: **mañana a las 10:00 la franja está llena**, **el próximo sábado está completo** y hay **un festivo** dentro de unos días.
 
@@ -68,7 +69,9 @@ Abajo siempre hay tres pestañas: **Inicio · Vehículos · Perfil**. Arriba, la
 - Sin coches → invita a añadir uno. Sin citas → explica cómo pedirla.
 
 ### 3.3 Mis vehículos
-- Lista de coches. **«Añadir»**: matrícula (se pone sola en formato «1234 ABC»), marca, modelo y año opcional.
+- Lista de coches. **«Añadir»**: país de la matrícula, matrícula, marca, modelo y año opcional.
+- **La matrícula se valida según el país** y no se puede guardar si no cumple el formato: España (4 números y 3 letras sin vocales, p. ej. 1234 BCD), España antigua (M 1234 AB), Portugal (AB-12-CD), Francia (AB-123-CD), Italia (AB 123 CD), Alemania (B AB 1234) u otro país. Se guarda con el formato correcto aunque la escribas en minúsculas o sin espacios.
+- No se puede registrar una matrícula que ya está en otra cuenta.
 - En cada coche: su estado si está en el taller, o **«Pedir cita para este coche»**.
 
 ### 3.4 Solicitar cita (6 pasos, una pregunta por pantalla)
@@ -82,11 +85,13 @@ Abajo siempre hay tres pestañas: **Inicio · Vehículos · Perfil**. Arriba, la
    - Si otra persona coge la última plaza mientras decides, la app te avisa y te deja elegir otra. Y si ocurre justo al enviar, te devuelve a este paso.
 6. **Revisa y envía**.
 
-Queda **«Pendiente de confirmar»** hasta que el taller la acepte. Si el taller no puede, recibes un aviso con el motivo.
+Queda **«Pendiente de confirmar»** hasta que el taller la acepte.
+
+**Si el taller no puede atenderte**, en Inicio aparece un aviso con su motivo y el botón **«Elegir otra fecha»**: solo eliges la nueva hora en el calendario; se mantienen el motivo, la descripción y las fotos. También puedes **«Descartar»** el aviso.
 
 ### 3.5 Seguimiento de la reparación (la pantalla principal)
 - **Estado actual en grande** con una frase sencilla, última actualización y, si existe, **«Listo aproximadamente: …»** (orientativo; si cambia, llega un aviso).
-- **Línea de tiempo** con los 7 pasos (hechos con día y hora, el actual resaltado, los pendientes en gris). Si algún paso no se hizo (por ejemplo, el coche se devolvió sin reparar), sale tachado como **«No realizado»**.
+- **Línea de tiempo** con los 6 pasos (Cita confirmada → Vehículo recibido → Diagnóstico → Presupuesto → Reparación iniciada → Listo para recoger) (hechos con día y hora, el actual resaltado, los pendientes en gris). Si algún paso no se hizo (por ejemplo, el coche se devolvió sin reparar), sale tachado como **«No realizado»**.
 - Botones: el principal según el momento, **«Contactar con el taller»** y, mientras la cita está confirmada y el coche aún no ha llegado, **«Anular cita»** (la hora queda libre).
 - **Se actualiza solo**, sin recargar.
 
@@ -99,13 +104,17 @@ Queda **«Pendiente de confirmar»** hasta que el taller la acepte. Si el taller
 - Aceptar **no** inicia la reparación automáticamente: la inicia el taller.
 
 ### 3.7 Mensajes
-Conversación sencilla ligada a la reparación, con los cambios de estado y presupuestos intercalados. Botón para **llamar** al taller.
+- **Icono de mensajes** arriba (junto a la campana) con el número de mensajes sin leer.
+- **Consulta con el taller**: para preguntar lo que quieras aunque no tengas ninguna reparación (precios, dudas, citas…).
+- **Una conversación por reparación**, con los cambios de estado y presupuestos intercalados.
+- Responde cualquier persona del taller; tus mensajes muestran **«Visto»** cuando los han leído. Botón para **llamar**.
+- Acceso también desde **Perfil → Escribir al taller** y desde «Contactar con el taller» en el seguimiento.
 
 ### 3.8 Listo para recoger
 Horario del taller, dirección con «Cómo llegar», **trabajos realizados y total**, o bien **«Sin reparación»** si se devolvió sin reparar. Botones **Llamar** y **Mensaje**.
 
 ### 3.9 Avisos y perfil
-- **Campana**: cita confirmada o rechazada, coche recibido, diagnóstico, presupuesto, reparación iniciada/terminada, listo para recoger, **nueva fecha estimada** y mensajes. Además aparece un aviso emergente al llegar.
+- **Campana**: cita confirmada o rechazada (con «Elegir otra fecha»), coche recibido, diagnóstico, presupuesto, reparación iniciada/terminada, listo para recoger, **nueva fecha estimada** y mensajes. Además aparece un aviso emergente al llegar.
 - **Perfil**: tus datos, los del taller y cerrar sesión.
 
 ---
@@ -128,14 +137,15 @@ Menú superior: **Vehículos · Calendario · Comunicaciones · Horario**, campa
 | --- | --- | --- |
 | Cita confirmada | **MARCAR RECIBIDO** | El cliente ve «Vehículo recibido» |
 | Vehículo recibido | **INICIAR DIAGNÓSTICO** | El cliente ve «Diagnóstico» |
-| Diagnóstico | **CREAR PRESUPUESTO** | Abre el editor |
+| Diagnóstico | **CREAR PRESUPUESTO** · *Reparar sin presupuesto* | Abre el editor, o empieza a reparar si el trabajo ya estaba acordado (pide confirmación) |
 | Presupuesto enviado | *Esperando al cliente* | Nada que hacer |
 | Cliente aceptó | **INICIAR REPARACIÓN** | El cliente ve «Reparación iniciada» |
 | Cliente preguntó | **REVISAR PRESUPUESTO** | Crea una nueva versión (y se responde en la conversación) |
 | Cliente rechazó | **NUEVO PRESUPUESTO** · **DEVOLVER SIN REPARAR** | Otra versión, o el coche pasa a «Listo para recoger» sin reparar |
-| Reparación iniciada | **FINALIZAR REPARACIÓN** | «Reparación terminada» |
-| Reparación terminada | **LISTO PARA RECOGER** | Aviso destacado al cliente |
-| Listo para recoger | **ENTREGAR Y CERRAR** | Pide confirmación y pasa al historial |
+| Reparación iniciada | **TERMINADO · LISTO PARA RECOGER** | Un solo clic: el cliente recibe el aviso para recogerlo |
+| Listo para recoger | **ENTREGADO AL CLIENTE** | Pasa al historial (con «Deshacer») |
+
+Los estados se simplificaron: antes había «Reparación terminada» y «Listo para recoger» por separado (dos clics). Ahora al terminar el coche queda directamente listo y el filtro «Reparación» solo muestra lo que se está reparando.
 
 Tras cada clic aparece **«Deshacer»**. **«Corregir estado»** permite arreglar errores con un motivo (queda en el historial).
 
@@ -168,7 +178,7 @@ Se ve al momento si el cliente acepta, rechaza, pregunta o **cambia de opinión*
 - Lo pueden cambiar el administrador y los mecánicos.
 
 ### 4.8 Comunicaciones y avisos
-Todas las conversaciones con buscador y contador de no leídos. La campana reúne solicitudes, **citas anuladas por el cliente**, presupuestos aceptados/rechazados/consultas, cambios de opinión y mensajes.
+Todas las conversaciones con buscador y contador de no leídos: **consultas generales** de clientes (aunque no tengan coche en el taller, marcadas como «Consulta general») y la conversación de **cada reparación**. Todo el equipo ve y responde las mismas conversaciones; los mensajes del taller salen a la derecha con el nombre de quien escribió. La campana reúne solicitudes, **citas anuladas por el cliente**, presupuestos aceptados/rechazados/consultas, cambios de opinión y mensajes.
 
 ---
 
@@ -180,14 +190,14 @@ Todas las conversaciones con buscador y contador de no leídos. La campana reún
 | 2 | Taller (Laura) | La solicitud aparece sola → **CONFIRMAR CITA** → mírala en **Calendario** |
 | 3 | Taller | En la tarjeta del Yaris: **MARCAR RECIBIDO** → **INICIAR DIAGNÓSTICO** → **CREAR PRESUPUESTO** → atajos + **plazo estimado «Mañana»** → **Enviar** |
 | 4 | Cliente | **Ver presupuesto** (con la fecha aproximada) → **ACEPTAR** |
-| 5 | Taller | **INICIAR REPARACIÓN** → **FINALIZAR** → **LISTO PARA RECOGER** |
+| 5 | Taller | **INICIAR REPARACIÓN** → **TERMINADO · LISTO PARA RECOGER** |
 | 6 | Cliente | «¡Listo para recoger!» → **Ver recogida** |
 | 7 | Taller | **Horario** → sube a 3 los coches por franja de las mañanas → Guardar |
 | 8 | Cliente | Vuelve a pedir cita: mañana a las 10:00 ya tiene «Última plaza» |
 | 9 | Cliente (David) | Presupuesto rechazado → **He cambiado de opinión: aceptar** |
 | 10 | Taller | El Focus sale de **Rechazados** y aparece **INICIAR REPARACIÓN** |
 
-Prueba también: rechazar el presupuesto del Seat León (Carlos) y **Devolver sin reparar**, **Anular** una cita, «Corregir estado», «Deshacer», cerrar un **día festivo**, **crear una cuenta** nueva.
+Prueba también: entra como **Nuria** y escribe al taller desde Mensajes, luego entra como **Laura** y respóndele; entra como **Sergio** y usa **«Elegir otra fecha»**; añade un coche con una matrícula inventada (con vocales no te dejará); rechazar el presupuesto del Seat León (Carlos) y **Devolver sin reparar**, **Anular** una cita, «Corregir estado», «Deshacer», cerrar un **día festivo**, **crear una cuenta** nueva.
 
 ---
 
@@ -200,6 +210,8 @@ Prueba también: rechazar el presupuesto del Seat León (Carlos) y **Devolver si
 **¿La fecha estimada es un compromiso?** No, es orientativa. El taller puede cambiarla y el cliente recibe un aviso.
 
 **¿Por qué los cambios aparecen solos?** Cliente y taller están conectados en tiempo real.
+
+**¿El chat funciona entre dos móviles distintos?** En esta demo no: los datos viven en cada navegador, así que cliente y taller tienen que estar en el mismo navegador (dos pestañas, la vista doble o cerrando sesión y entrando con la otra cuenta). En la versión con servidor (Supabase) funcionará entre cualquier dispositivo.
 
 **¿Se puede instalar?** Sí: en el móvil, menú del navegador → «Añadir a pantalla de inicio».
 

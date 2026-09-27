@@ -10,9 +10,11 @@ import {
 } from "@/lib/domain/estimate";
 import { checkSlotBookable, issueCategoryLabel } from "@/lib/domain/appointments";
 import { validateSchedule, type ScheduleInput } from "@/lib/domain/schedule";
+import { plateKey, validatePlate } from "@/lib/domain/plates";
 import { formatDateTime, formatWhen, vehicleName } from "@/lib/format";
 import { getSessionUserId, getState, setSessionUserId, transact, uuid } from "@/lib/mock/store";
 import type { MockState } from "@/lib/mock/types";
+import type { ChatThread } from "@/lib/data/queries";
 import type {
   Estimate,
   EstimateItemType,
@@ -36,7 +38,17 @@ import type {
  */
 
 const LATENCY_MS = 250;
-const delay = () => new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
+
+/**
+ * Ejecuta la escritura al momento y después simula la latencia de red (para
+ * ver los estados de carga). Así, como con un servidor real, lo enviado queda
+ * guardado aunque el usuario cierre sesión o recargue enseguida.
+ */
+async function withLatency<T>(write: () => T): Promise<T> {
+  const result = write();
+  await new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
+  return result;
+}
 
 export class ActionError extends Error {}
 /** La hora elegida ya no está disponible (llena, cerrada o pasada). */
@@ -139,9 +151,9 @@ function applyStatusChange(
     note,
     created_at: at,
   });
+  if (to === "ready_for_pickup" && repair.current_status === "repair_in_progress") repair.completed_at = at;
   repair.current_status = to;
   repair.updated_at = at;
-  if (to === "repair_completed") repair.completed_at = at;
 
   if (to === "vehicle_received" && repair.appointment_id) {
     const appointment = draft.db.appointments.find((a) => a.id === repair.appointment_id);
@@ -159,17 +171,18 @@ function applyStatusChange(
 // ---------------------------------------------------------------------------
 
 export async function signIn(email: string, password: string): Promise<Profile> {
-  await delay();
-  return transact((draft) => {
-    const user = draft.auth_users.find(
-      (u) => u.email.toLowerCase() === email.trim().toLowerCase() && u.password === password,
-    );
-    if (!user) throw new ActionError("Email o contraseña incorrectos.");
-    const profile = draft.db.profiles.find((p) => p.id === user.id);
-    if (!profile) throw new ActionError("Este usuario no tiene perfil.");
-    setSessionUserId(profile.id);
-    return profile;
-  });
+  return withLatency(() =>
+    transact((draft) => {
+      const user = draft.auth_users.find(
+        (u) => u.email.toLowerCase() === email.trim().toLowerCase() && u.password === password,
+      );
+      if (!user) throw new ActionError("Email o contraseña incorrectos.");
+      const profile = draft.db.profiles.find((p) => p.id === user.id);
+      if (!profile) throw new ActionError("Este usuario no tiene perfil.");
+      setSessionUserId(profile.id);
+      return profile;
+    }),
+  );
 }
 
 export async function signOut() {
@@ -178,26 +191,27 @@ export async function signOut() {
 
 /** Alta de cliente. Con Supabase: supabase.auth.signUp + trigger que crea el perfil. */
 export async function signUp(input: SignupInput): Promise<Profile> {
-  await delay();
-  return transact((draft) => {
-    const email = input.email.trim().toLowerCase();
-    if (draft.auth_users.some((u) => u.email.toLowerCase() === email)) {
-      throw new ActionError("Ya existe una cuenta con ese email. Prueba a entrar.");
-    }
-    const id = uuid();
-    draft.auth_users.push({ id, email, password: input.password });
-    const profile: Profile = {
-      id,
-      full_name: input.full_name.trim(),
-      phone: input.phone.trim(),
-      role: "customer",
-      workshop_id: null,
-      created_at: nowIso(),
-    };
-    draft.db.profiles.push(profile);
-    setSessionUserId(id);
-    return profile;
-  });
+  return withLatency(() =>
+    transact((draft) => {
+      const email = input.email.trim().toLowerCase();
+      if (draft.auth_users.some((u) => u.email.toLowerCase() === email)) {
+        throw new ActionError("Ya existe una cuenta con ese email. Prueba a entrar.");
+      }
+      const id = uuid();
+      draft.auth_users.push({ id, email, password: input.password });
+      const profile: Profile = {
+        id,
+        full_name: input.full_name.trim(),
+        phone: input.phone.trim(),
+        role: "customer",
+        workshop_id: null,
+        created_at: nowIso(),
+      };
+      draft.db.profiles.push(profile);
+      setSessionUserId(id);
+      return profile;
+    }),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -205,27 +219,35 @@ export async function signUp(input: SignupInput): Promise<Profile> {
 // ---------------------------------------------------------------------------
 
 export async function addVehicle(input: VehicleInput): Promise<string> {
-  await delay();
-  return transact((draft) => {
-    const profile = currentProfile(draft);
-    const plate = input.license_plate;
-    if (draft.db.vehicles.some((v) => v.customer_id === profile.id && v.license_plate === plate)) {
-      throw new ActionError("Ya tienes un vehículo con esa matrícula.");
-    }
-    const id = uuid();
-    draft.db.vehicles.push({
-      id,
-      customer_id: profile.id,
-      workshop_id: draft.db.workshops[0]?.id ?? null,
-      license_plate: plate,
-      make: input.make,
-      model: input.model,
-      year: input.year ?? null,
-      vin: null,
-      created_at: nowIso(),
-    });
-    return id;
-  });
+  return withLatency(() =>
+    transact((draft) => {
+      const profile = currentProfile(draft);
+      const check = validatePlate(input.license_plate, input.plate_format);
+      if (!check.ok) throw new ActionError(check.error);
+      const plate = check.plate;
+      const existing = draft.db.vehicles.find((v) => plateKey(v.license_plate) === plateKey(plate));
+      if (existing?.customer_id === profile.id) {
+        throw new ActionError("Ya tienes un vehículo con esa matrícula.");
+      }
+      if (existing) {
+        throw new ActionError("Esta matrícula ya está registrada en otra cuenta. Si el coche es tuyo, habla con el taller.");
+      }
+      const id = uuid();
+      draft.db.vehicles.push({
+        id,
+        customer_id: profile.id,
+        workshop_id: draft.db.workshops[0]?.id ?? null,
+        license_plate: plate,
+        plate_format: input.plate_format,
+        make: input.make,
+        model: input.model,
+        year: input.year ?? null,
+        vin: null,
+        created_at: nowIso(),
+      });
+      return id;
+    }),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -242,134 +264,144 @@ export async function requestAppointment(
   input: AppointmentRequestInput,
   media: MediaUpload[],
 ): Promise<string> {
-  await delay();
-  return transact((draft) => {
-    const profile = currentProfile(draft);
-    const vehicle = draft.db.vehicles.find((v) => v.id === input.vehicle_id && v.customer_id === profile.id);
-    if (!vehicle) throw new ActionError("Elige uno de tus vehículos.");
-    const workshop = draft.db.workshops[0];
+  return withLatency(() =>
+    transact((draft) => {
+      const profile = currentProfile(draft);
+      const vehicle = draft.db.vehicles.find((v) => v.id === input.vehicle_id && v.customer_id === profile.id);
+      if (!vehicle) throw new ActionError("Elige uno de tus vehículos.");
+      const workshop = draft.db.workshops[0];
 
-    // Se comprueba en el momento de guardar: otra persona puede haber
-    // reservado la última plaza mientras el cliente rellenaba el formulario.
-    const check = checkSlotBookable(
-      draft.db.workshop_availability.filter((a) => a.workshop_id === workshop.id),
-      draft.db.workshop_closures.filter((c) => c.workshop_id === workshop.id),
-      draft.db.appointments.filter((a) => a.workshop_id === workshop.id),
-      input.scheduled_at,
-    );
-    if (!check.ok) throw new SlotUnavailableError(check.reason);
+      // Se comprueba en el momento de guardar: otra persona puede haber
+      // reservado la última plaza mientras el cliente rellenaba el formulario.
+      const check = checkSlotBookable(
+        draft.db.workshop_availability.filter((a) => a.workshop_id === workshop.id),
+        draft.db.workshop_closures.filter((c) => c.workshop_id === workshop.id),
+        draft.db.appointments.filter((a) => a.workshop_id === workshop.id),
+        input.scheduled_at,
+      );
+      if (!check.ok) throw new SlotUnavailableError(check.reason);
 
-    const id = uuid();
-    const createdAt = nowIso();
-    const description = [input.issue_description, input.since ? `Desde: ${input.since}.` : ""]
-      .filter(Boolean)
-      .join(" ");
+      const id = uuid();
+      const createdAt = nowIso();
+      const description = [input.issue_description, input.since ? `Desde: ${input.since}.` : ""]
+        .filter(Boolean)
+        .join(" ");
 
-    draft.db.appointments.push({
-      id,
-      workshop_id: workshop.id,
-      vehicle_id: vehicle.id,
-      customer_id: profile.id,
-      scheduled_at: input.scheduled_at,
-      status: "requested",
-      issue_category: input.issue_category,
-      issue_description: description || null,
-      drivable_status: input.drivable_status,
-      created_at: createdAt,
-    });
-
-    for (const file of media) {
-      const mediaId = uuid();
-      const path = `${workshop.id}/appointments/${id}/${mediaId}`;
-      draft.storage[path] = { url: file.dataUrl, mime_type: file.mimeType };
-      draft.db.appointment_media.push({
-        id: mediaId,
-        appointment_id: id,
-        uploaded_by: profile.id,
-        storage_path: path,
-        media_type: file.mediaType,
+      draft.db.appointments.push({
+        id,
+        workshop_id: workshop.id,
+        vehicle_id: vehicle.id,
+        customer_id: profile.id,
+        scheduled_at: input.scheduled_at,
+        status: "requested",
+        issue_category: input.issue_category,
+        issue_description: description || null,
+        drivable_status: input.drivable_status,
+        cancelled_by: null,
+        cancellation_reason: null,
+        customer_dismissed_at: null,
         created_at: createdAt,
       });
-    }
 
-    notifyStaff(
-      draft,
-      workshop.id,
-      null,
-      "appointment_requested",
-      "Nueva solicitud de cita",
-      `${profile.full_name} · ${vehicleName(vehicle)} · ${formatDateTime(input.scheduled_at)} · ${issueCategoryLabel(input.issue_category)}`,
-    );
-    return id;
-  });
+      for (const file of media) {
+        const mediaId = uuid();
+        const path = `${workshop.id}/appointments/${id}/${mediaId}`;
+        draft.storage[path] = { url: file.dataUrl, mime_type: file.mimeType };
+        draft.db.appointment_media.push({
+          id: mediaId,
+          appointment_id: id,
+          uploaded_by: profile.id,
+          storage_path: path,
+          media_type: file.mediaType,
+          created_at: createdAt,
+        });
+      }
+
+      notifyStaff(
+        draft,
+        workshop.id,
+        null,
+        "appointment_requested",
+        "Nueva solicitud de cita",
+        `${profile.full_name} · ${vehicleName(vehicle)} · ${formatDateTime(input.scheduled_at)} · ${issueCategoryLabel(input.issue_category)}`,
+      );
+      return id;
+    }),
+  );
 }
 
 /** Confirma la cita y abre la reparación en "Cita confirmada". Devuelve el id de la reparación. */
 export async function confirmAppointment(appointmentId: string): Promise<string> {
-  await delay();
-  return transact((draft) => {
-    const appointment = draft.db.appointments.find((a) => a.id === appointmentId);
-    if (!appointment) throw new ActionError("No encontramos esta cita.");
-    const staff = requireStaff(draft, appointment.workshop_id);
-    if (appointment.status !== "requested") throw new ActionError("Esta cita ya estaba gestionada.");
+  return withLatency(() =>
+    transact((draft) => {
+      const appointment = draft.db.appointments.find((a) => a.id === appointmentId);
+      if (!appointment) throw new ActionError("No encontramos esta cita.");
+      const staff = requireStaff(draft, appointment.workshop_id);
+      if (appointment.status !== "requested") throw new ActionError("Esta cita ya estaba gestionada.");
 
-    appointment.status = "confirmed";
+      appointment.status = "confirmed";
 
-    const existing = draft.db.repair_orders.find((r) => r.appointment_id === appointment.id);
-    if (existing) return existing.id;
+      const existing = draft.db.repair_orders.find((r) => r.appointment_id === appointment.id);
+      if (existing) return existing.id;
 
-    const at = nowIso();
-    const repair: RepairOrder = {
-      id: uuid(),
-      workshop_id: appointment.workshop_id,
-      vehicle_id: appointment.vehicle_id,
-      customer_id: appointment.customer_id,
-      appointment_id: appointment.id,
-      current_status: "appointment_confirmed",
-      opened_at: at,
-      completed_at: null,
-      estimated_ready_at: null,
-      created_at: at,
-      updated_at: at,
-    };
-    draft.db.repair_orders.push(repair);
-    draft.db.repair_status_history.push({
-      id: uuid(),
-      repair_order_id: repair.id,
-      from_status: null,
-      to_status: "appointment_confirmed",
-      changed_by: staff.id,
-      note: null,
-      created_at: at,
-    });
-    notify(
-      draft,
-      appointment.customer_id,
-      repair.id,
-      "appointment_confirmed",
-      "Cita confirmada",
-      `Te esperamos ${formatWhen(appointment.scheduled_at)} con tu ${vehicleLabel(draft, appointment.vehicle_id)}.`,
-    );
-    return repair.id;
-  });
+      const at = nowIso();
+      const repair: RepairOrder = {
+        id: uuid(),
+        workshop_id: appointment.workshop_id,
+        vehicle_id: appointment.vehicle_id,
+        customer_id: appointment.customer_id,
+        appointment_id: appointment.id,
+        current_status: "appointment_confirmed",
+        opened_at: at,
+        completed_at: null,
+        estimated_ready_at: null,
+        created_at: at,
+        updated_at: at,
+      };
+      draft.db.repair_orders.push(repair);
+      draft.db.repair_status_history.push({
+        id: uuid(),
+        repair_order_id: repair.id,
+        from_status: null,
+        to_status: "appointment_confirmed",
+        changed_by: staff.id,
+        note: null,
+        created_at: at,
+      });
+      notify(
+        draft,
+        appointment.customer_id,
+        repair.id,
+        "appointment_confirmed",
+        "Cita confirmada",
+        `Te esperamos ${formatWhen(appointment.scheduled_at)} con tu ${vehicleLabel(draft, appointment.vehicle_id)}.`,
+      );
+      return repair.id;
+    }),
+  );
 }
 
 export async function declineAppointment(appointmentId: string, reason: string): Promise<void> {
-  await delay();
-  transact((draft) => {
-    const appointment = draft.db.appointments.find((a) => a.id === appointmentId);
-    if (!appointment) throw new ActionError("No encontramos esta cita.");
-    requireStaff(draft, appointment.workshop_id);
-    appointment.status = "cancelled";
-    notify(
-      draft,
-      appointment.customer_id,
-      null,
-      "appointment_cancelled",
-      "No podemos atenderte a esa hora",
-      reason || "Por favor, solicita otra hora para tu cita.",
-    );
-  });
+  await withLatency(() =>
+    transact((draft) => {
+      const appointment = draft.db.appointments.find((a) => a.id === appointmentId);
+      if (!appointment) throw new ActionError("No encontramos esta cita.");
+      requireStaff(draft, appointment.workshop_id);
+      if (appointment.status !== "requested") throw new ActionError("Esta solicitud ya estaba gestionada.");
+      appointment.status = "cancelled";
+      appointment.cancelled_by = "workshop";
+      appointment.cancellation_reason = reason.trim() || null;
+      appointment.customer_dismissed_at = null;
+      notify(
+        draft,
+        appointment.customer_id,
+        null,
+        "appointment_cancelled",
+        "No podemos atenderte a esa hora",
+        `${reason.trim() || "Elige otra hora para tu cita."} Puedes elegir otra fecha desde la app.`,
+      );
+    }),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -379,28 +411,29 @@ export async function declineAppointment(appointmentId: string, reason: string):
 export async function changeRepairStatus(
   repairId: string,
   to: RepairStatus,
-  options: { note?: string; manual?: boolean } = {},
+  options: { note?: string; manual?: boolean; withoutEstimate?: boolean } = {},
 ): Promise<void> {
-  await delay();
-  transact((draft) => {
-    const repair = findRepair(draft, repairId);
-    const staff = requireStaff(draft, repair.workshop_id);
-    if (repair.current_status === to) return;
+  await withLatency(() =>
+    transact((draft) => {
+      const repair = findRepair(draft, repairId);
+      const staff = requireStaff(draft, repair.workshop_id);
+      if (repair.current_status === to) return;
 
-    if (!options.manual && to === "repair_in_progress") {
-      const latest = draft.db.estimates
-        .filter((e) => e.repair_order_id === repairId && e.status !== "draft")
-        .sort((a, b) => b.version - a.version)[0];
-      if (latest?.status !== "accepted") {
-        throw new ActionError("El cliente todavía no ha aceptado el presupuesto.");
+      if (!options.manual && !options.withoutEstimate && to === "repair_in_progress") {
+        const latest = draft.db.estimates
+          .filter((e) => e.repair_order_id === repairId && e.status !== "draft")
+          .sort((a, b) => b.version - a.version)[0];
+        if (latest?.status !== "accepted") {
+          throw new ActionError("El cliente todavía no ha aceptado el presupuesto.");
+        }
       }
-    }
 
-    const note = options.manual
-      ? `Corrección manual${options.note ? `: ${options.note}` : ""}`
-      : options.note ?? null;
-    applyStatusChange(draft, repair, to, staff.id, note);
-  });
+      const note = options.manual
+        ? `Corrección manual${options.note ? `: ${options.note}` : ""}`
+        : options.note ?? null;
+      applyStatusChange(draft, repair, to, staff.id, note);
+    }),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -412,45 +445,45 @@ export async function changeRepairStatus(
  * lo vio el cliente, crea una versión nueva copiando sus líneas.
  */
 export async function getOrCreateDraftEstimate(repairId: string): Promise<string> {
-  await delay();
-  return transact((draft) => {
-    const repair = findRepair(draft, repairId);
-    requireStaff(draft, repair.workshop_id);
+  return withLatency(() =>
+    transact((draft) => {
+      const repair = findRepair(draft, repairId);
+      requireStaff(draft, repair.workshop_id);
 
-    const latest = draft.db.estimates
-      .filter((e) => e.repair_order_id === repairId)
-      .sort((a, b) => b.version - a.version)[0];
-    if (latest?.status === "draft") return latest.id;
+      const latest = draft.db.estimates
+        .filter((e) => e.repair_order_id === repairId)
+        .sort((a, b) => b.version - a.version)[0];
+      if (latest?.status === "draft") return latest.id;
 
-    const id = uuid();
-    const at = nowIso();
-    const baseItems = latest
-      ? draft.db.estimate_items.filter((i) => i.estimate_id === latest.id)
-      : [];
+      const id = uuid();
+      const at = nowIso();
+      const baseItems = latest
+        ? draft.db.estimate_items.filter((i) => i.estimate_id === latest.id)
+        : [];
 
-    const items = baseItems.map((item) => ({ ...item, id: uuid(), estimate_id: id }));
-    draft.db.estimate_items.push(...items);
-    draft.db.estimates.push({
-      id,
-      workshop_id: repair.workshop_id,
-      repair_order_id: repairId,
-      status: "draft",
-      ...calculateEstimateTotals(items, latest?.tax_rate ?? DEFAULT_TAX_RATE),
-      sent_at: null,
-      accepted_at: null,
-      rejected_at: null,
-      estimated_ready_at: latest?.estimated_ready_at ?? repair.estimated_ready_at ?? null,
-      version: (latest?.version ?? 0) + 1,
-      created_at: at,
-      updated_at: at,
-    });
-    return id;
-  });
+      const items = baseItems.map((item) => ({ ...item, id: uuid(), estimate_id: id }));
+      draft.db.estimate_items.push(...items);
+      draft.db.estimates.push({
+        id,
+        workshop_id: repair.workshop_id,
+        repair_order_id: repairId,
+        status: "draft",
+        ...calculateEstimateTotals(items, latest?.tax_rate ?? DEFAULT_TAX_RATE),
+        sent_at: null,
+        accepted_at: null,
+        rejected_at: null,
+        estimated_ready_at: latest?.estimated_ready_at ?? repair.estimated_ready_at ?? null,
+        version: (latest?.version ?? 0) + 1,
+        created_at: at,
+        updated_at: at,
+      });
+      return id;
+    }),
+  );
 }
 
 export async function saveEstimateDraft(estimateId: string, input: EstimateFormInput): Promise<void> {
-  await delay();
-  transact((draft) => writeDraft(draft, estimateId, input));
+  await withLatency(() => transact((draft) => writeDraft(draft, estimateId, input)));
 }
 
 function writeDraft(draft: MockState, estimateId: string, input: EstimateFormInput) {
@@ -482,35 +515,36 @@ function writeDraft(draft: MockState, estimateId: string, input: EstimateFormInp
 }
 
 export async function sendEstimate(estimateId: string, input: EstimateFormInput): Promise<void> {
-  await delay();
-  transact((draft) => {
-    writeDraft(draft, estimateId, input);
-    const estimate = findEstimate(draft, estimateId);
-    const staff = requireStaff(draft, estimate.workshop_id);
-    const repair = findRepair(draft, estimate.repair_order_id);
+  await withLatency(() =>
+    transact((draft) => {
+      writeDraft(draft, estimateId, input);
+      const estimate = findEstimate(draft, estimateId);
+      const staff = requireStaff(draft, estimate.workshop_id);
+      const repair = findRepair(draft, estimate.repair_order_id);
 
-    const at = nowIso();
-    estimate.status = "sent";
-    estimate.sent_at = at;
-    estimate.updated_at = at;
-    repair.estimated_ready_at = estimate.estimated_ready_at;
+      const at = nowIso();
+      estimate.status = "sent";
+      estimate.sent_at = at;
+      estimate.updated_at = at;
+      repair.estimated_ready_at = estimate.estimated_ready_at;
 
-    if (repair.current_status === "estimate_pending") {
-      // Nueva versión sobre un presupuesto ya pendiente: queda en el historial.
-      applyStatusChange(draft, repair, "estimate_pending", staff.id, `Presupuesto v${estimate.version} enviado`);
-    } else {
-      applyStatusChange(draft, repair, "estimate_pending", staff.id);
-    }
+      if (repair.current_status === "estimate_pending") {
+        // Nueva versión sobre un presupuesto ya pendiente: queda en el historial.
+        applyStatusChange(draft, repair, "estimate_pending", staff.id, `Presupuesto v${estimate.version} enviado`);
+      } else {
+        applyStatusChange(draft, repair, "estimate_pending", staff.id);
+      }
 
-    notify(
-      draft,
-      repair.customer_id,
-      repair.id,
-      "estimate_sent",
-      estimate.version > 1 ? "Presupuesto actualizado" : "Tienes un presupuesto",
-      `Revisa el presupuesto de tu ${vehicleLabel(draft, repair.vehicle_id)}.`,
-    );
-  });
+      notify(
+        draft,
+        repair.customer_id,
+        repair.id,
+        "estimate_sent",
+        estimate.version > 1 ? "Presupuesto actualizado" : "Tienes un presupuesto",
+        `Revisa el presupuesto de tu ${vehicleLabel(draft, repair.vehicle_id)}.`,
+      );
+    }),
+  );
 }
 
 export type EstimateResponse = "accept" | "reject" | "question" | "talk";
@@ -520,118 +554,147 @@ export async function respondToEstimate(
   response: EstimateResponse,
   message?: string,
 ): Promise<void> {
-  await delay();
-  transact((draft) => {
-    const estimate = findEstimate(draft, estimateId);
-    const repair = findRepair(draft, estimate.repair_order_id);
-    const customer = requireCustomer(draft, repair.customer_id);
-    const newer = draft.db.estimates.some(
-      (e) => e.repair_order_id === repair.id && e.version > estimate.version && e.status !== "draft",
-    );
-    const ctx = {
-      status: estimate.status,
-      isLatest: !newer,
-      repairAwaitingEstimate: repair.current_status === "estimate_pending",
-    };
-    const allowed = response === "accept" ? canCustomerAccept(ctx) : canCustomerRejectOrAsk(ctx);
-    if (!allowed) {
-      throw new ActionError("Este presupuesto ya no admite respuesta.");
-    }
-    const changedMind = response === "accept" && estimate.status === "rejected";
-
-    const at = nowIso();
-    estimate.updated_at = at;
-    const vehicle = vehicleLabel(draft, repair.vehicle_id);
-
-    const addMessage = (body: string) =>
-      draft.db.messages.push({
-        id: uuid(),
-        workshop_id: repair.workshop_id,
-        repair_order_id: repair.id,
-        sender_id: customer.id,
-        body,
-        created_at: at,
-        read_at: null,
-      });
-
-    switch (response) {
-      case "accept":
-        // rejected_at se conserva para la trazabilidad si había cambiado de opinión.
-        estimate.status = "accepted";
-        estimate.accepted_at = at;
-        if (changedMind) addMessage("He cambiado de opinión: acepto el presupuesto.");
-        notifyStaff(draft, repair.workshop_id, repair.id, "estimate_accepted",
-          changedMind ? "El cliente ha cambiado de opinión" : "Presupuesto aceptado",
-          `${customer.full_name} ha aceptado el presupuesto v${estimate.version} · ${vehicle}`);
-        break;
-      case "reject":
-        estimate.status = "rejected";
-        estimate.rejected_at = at;
-        if (message) addMessage(message);
-        notifyStaff(draft, repair.workshop_id, repair.id, "estimate_rejected",
-          "Presupuesto rechazado", `${customer.full_name} no quiere realizar la reparación · ${vehicle}`);
-        break;
-      case "question":
-      case "talk": {
-        estimate.status = "question";
-        addMessage(
-          response === "talk"
-            ? message || "Me gustaría hablar con el taller sobre el presupuesto. ¿Podéis llamarme?"
-            : message || "Tengo una duda sobre el presupuesto.",
-        );
-        notifyStaff(draft, repair.workshop_id, repair.id, "estimate_question",
-          response === "talk" ? "El cliente quiere hablar" : "Consulta sobre presupuesto",
-          `${customer.full_name} · ${vehicle}`);
-        break;
+  await withLatency(() =>
+    transact((draft) => {
+      const estimate = findEstimate(draft, estimateId);
+      const repair = findRepair(draft, estimate.repair_order_id);
+      const customer = requireCustomer(draft, repair.customer_id);
+      const newer = draft.db.estimates.some(
+        (e) => e.repair_order_id === repair.id && e.version > estimate.version && e.status !== "draft",
+      );
+      const ctx = {
+        status: estimate.status,
+        isLatest: !newer,
+        repairAwaitingEstimate: repair.current_status === "estimate_pending",
+      };
+      const allowed = response === "accept" ? canCustomerAccept(ctx) : canCustomerRejectOrAsk(ctx);
+      if (!allowed) {
+        throw new ActionError("Este presupuesto ya no admite respuesta.");
       }
-    }
-  });
+      const changedMind = response === "accept" && estimate.status === "rejected";
+
+      const at = nowIso();
+      estimate.updated_at = at;
+      const vehicle = vehicleLabel(draft, repair.vehicle_id);
+
+      const addMessage = (body: string) =>
+        draft.db.messages.push({
+          id: uuid(),
+          workshop_id: repair.workshop_id,
+          customer_id: repair.customer_id,
+          repair_order_id: repair.id,
+          sender_id: customer.id,
+          body,
+          created_at: at,
+          read_at: null,
+        });
+
+      switch (response) {
+        case "accept":
+          // rejected_at se conserva para la trazabilidad si había cambiado de opinión.
+          estimate.status = "accepted";
+          estimate.accepted_at = at;
+          if (changedMind) addMessage("He cambiado de opinión: acepto el presupuesto.");
+          notifyStaff(draft, repair.workshop_id, repair.id, "estimate_accepted",
+            changedMind ? "El cliente ha cambiado de opinión" : "Presupuesto aceptado",
+            `${customer.full_name} ha aceptado el presupuesto v${estimate.version} · ${vehicle}`);
+          break;
+        case "reject":
+          estimate.status = "rejected";
+          estimate.rejected_at = at;
+          if (message) addMessage(message);
+          notifyStaff(draft, repair.workshop_id, repair.id, "estimate_rejected",
+            "Presupuesto rechazado", `${customer.full_name} no quiere realizar la reparación · ${vehicle}`);
+          break;
+        case "question":
+        case "talk": {
+          estimate.status = "question";
+          addMessage(
+            response === "talk"
+              ? message || "Me gustaría hablar con el taller sobre el presupuesto. ¿Podéis llamarme?"
+              : message || "Tengo una duda sobre el presupuesto.",
+          );
+          notifyStaff(draft, repair.workshop_id, repair.id, "estimate_question",
+            response === "talk" ? "El cliente quiere hablar" : "Consulta sobre presupuesto",
+            `${customer.full_name} · ${vehicle}`);
+          break;
+        }
+      }
+    }),
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Mensajes y notificaciones
 // ---------------------------------------------------------------------------
 
-export async function sendMessage(repairId: string, body: string): Promise<void> {
+/**
+ * Envía un mensaje en una conversación (la general del cliente o la de una
+ * reparación). Lo lee cualquier empleado del taller y el propio cliente.
+ */
+export async function sendMessage(thread: ChatThread, body: string): Promise<void> {
   const text = body.trim();
   if (!text) return;
-  await delay();
-  transact((draft) => {
-    const repair = findRepair(draft, repairId);
-    const sender = currentProfile(draft);
-    const isStaff = sender.role !== "customer";
-    if (isStaff) requireStaff(draft, repair.workshop_id);
-    else requireCustomer(draft, repair.customer_id);
+  if (text.length > 2000) throw new ActionError("El mensaje es demasiado largo.");
+  await withLatency(() =>
+    transact((draft) => {
+      const sender = currentProfile(draft);
+      const isStaff = sender.role !== "customer";
+      const customer = draft.db.profiles.find((p) => p.id === thread.customerId && p.role === "customer");
+      if (!customer) throw new ActionError("No encontramos a este cliente.");
 
-    draft.db.messages.push({
-      id: uuid(),
-      workshop_id: repair.workshop_id,
-      repair_order_id: repair.id,
-      sender_id: sender.id,
-      body: text,
-      created_at: nowIso(),
-      read_at: null,
-    });
+      let workshopId: string;
+      if (thread.repairId) {
+        const repair = findRepair(draft, thread.repairId);
+        if (repair.customer_id !== thread.customerId) throw new ActionError("Esta conversación no es de este cliente.");
+        workshopId = repair.workshop_id;
+      } else {
+        // MVP con un solo taller: la consulta general va a él.
+        workshopId = isStaff ? sender.workshop_id ?? "" : draft.db.workshops[0]?.id ?? "";
+      }
+      if (isStaff) requireStaff(draft, workshopId);
+      else requireCustomer(draft, thread.customerId);
 
-    const preview = text.length > 80 ? `${text.slice(0, 77)}…` : text;
-    if (isStaff) {
-      notify(draft, repair.customer_id, repair.id, "message", "Mensaje del taller", preview);
-    } else {
-      notifyStaff(draft, repair.workshop_id, repair.id, "message", `Nuevo mensaje de ${sender.full_name}`, preview);
-    }
-  });
+      draft.db.messages.push({
+        id: uuid(),
+        workshop_id: workshopId,
+        customer_id: thread.customerId,
+        repair_order_id: thread.repairId,
+        sender_id: sender.id,
+        body: text,
+        created_at: nowIso(),
+        read_at: null,
+      });
+
+      const preview = text.length > 80 ? `${text.slice(0, 77)}…` : text;
+      if (isStaff) {
+        notify(draft, thread.customerId, thread.repairId, "message", "Mensaje del taller", preview);
+      } else {
+        notifyStaff(
+          draft,
+          workshopId,
+          thread.repairId,
+          "message",
+          thread.repairId ? `Nuevo mensaje de ${sender.full_name}` : `Nueva consulta de ${sender.full_name}`,
+          preview,
+        );
+      }
+    }),
+  );
 }
 
 /** Marca como leídos los mensajes de la otra parte. Síncrona: se llama al abrir la conversación. */
-export function markMessagesRead(repairId: string) {
+export function markMessagesRead(thread: ChatThread) {
   const userId = getSessionUserId();
   if (!userId) return;
+  const inThisThread = (m: MockState["db"]["messages"][number]) =>
+    m.customer_id === thread.customerId && m.repair_order_id === thread.repairId;
   const hasUnread = (state: MockState) => {
     const reader = state.db.profiles.find((p) => p.id === userId);
     if (!reader) return false;
     const readerIsStaff = reader.role !== "customer";
     return state.db.messages.some((m) => {
-      if (m.repair_order_id !== repairId || m.read_at) return false;
+      if (!inThisThread(m) || m.read_at) return false;
       const sender = state.db.profiles.find((p) => p.id === m.sender_id);
       return (sender ? sender.role !== "customer" : false) !== readerIsStaff;
     });
@@ -644,13 +707,13 @@ export function markMessagesRead(repairId: string) {
     const readerIsStaff = reader.role !== "customer";
     const at = nowIso();
     for (const message of draft.db.messages) {
-      if (message.repair_order_id !== repairId || message.read_at) continue;
+      if (!inThisThread(message) || message.read_at) continue;
       const sender = draft.db.profiles.find((p) => p.id === message.sender_id);
       const senderIsStaff = sender ? sender.role !== "customer" : false;
       if (senderIsStaff !== readerIsStaff) message.read_at = at;
     }
     for (const notification of draft.db.notifications) {
-      if (notification.user_id === userId && notification.repair_order_id === repairId && notification.type === "message" && !notification.read_at) {
+      if (notification.user_id === userId && notification.repair_order_id === thread.repairId && notification.type === "message" && !notification.read_at) {
         notification.read_at = at;
       }
     }
@@ -678,31 +741,33 @@ export function markNotificationsRead() {
  * haya llegado). La plaza queda libre al instante.
  */
 export async function cancelAppointment(appointmentId: string): Promise<void> {
-  await delay();
-  transact((draft) => {
-    const appointment = draft.db.appointments.find((a) => a.id === appointmentId);
-    if (!appointment) throw new ActionError("No encontramos esta cita.");
-    const customer = requireCustomer(draft, appointment.customer_id);
-    if (appointment.status !== "requested" && appointment.status !== "confirmed") {
-      throw new ActionError("Esta cita ya no se puede anular.");
-    }
-    const repair = draft.db.repair_orders.find((r) => r.appointment_id === appointment.id);
-    if (repair && repair.current_status !== "appointment_confirmed") {
-      throw new ActionError("El coche ya está en el taller: habla con ellos para cualquier cambio.");
-    }
+  await withLatency(() =>
+    transact((draft) => {
+      const appointment = draft.db.appointments.find((a) => a.id === appointmentId);
+      if (!appointment) throw new ActionError("No encontramos esta cita.");
+      const customer = requireCustomer(draft, appointment.customer_id);
+      if (appointment.status !== "requested" && appointment.status !== "confirmed") {
+        throw new ActionError("Esta cita ya no se puede anular.");
+      }
+      const repair = draft.db.repair_orders.find((r) => r.appointment_id === appointment.id);
+      if (repair && repair.current_status !== "appointment_confirmed") {
+        throw new ActionError("El coche ya está en el taller: habla con ellos para cualquier cambio.");
+      }
 
-    appointment.status = "cancelled";
-    if (repair) applyStatusChange(draft, repair, "closed", customer.id, "Cita anulada por el cliente");
+      appointment.status = "cancelled";
+      appointment.cancelled_by = "customer";
+      if (repair) applyStatusChange(draft, repair, "closed", customer.id, "Cita anulada por el cliente");
 
-    notifyStaff(
-      draft,
-      appointment.workshop_id,
-      repair?.id ?? null,
-      "appointment_cancelled",
-      "Cita anulada por el cliente",
-      `${customer.full_name} · ${vehicleLabel(draft, appointment.vehicle_id)} · ${formatDateTime(appointment.scheduled_at)}`,
-    );
-  });
+      notifyStaff(
+        draft,
+        appointment.workshop_id,
+        repair?.id ?? null,
+        "appointment_cancelled",
+        "Cita anulada por el cliente",
+        `${customer.full_name} · ${vehicleLabel(draft, appointment.vehicle_id)} · ${formatDateTime(appointment.scheduled_at)}`,
+      );
+    }),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -710,26 +775,27 @@ export async function cancelAppointment(appointmentId: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function setEstimatedReadyAt(repairId: string, estimatedReadyAt: string | null): Promise<void> {
-  await delay();
-  transact((draft) => {
-    const repair = findRepair(draft, repairId);
-    requireStaff(draft, repair.workshop_id);
-    if (repair.estimated_ready_at === estimatedReadyAt) return;
-    repair.estimated_ready_at = estimatedReadyAt;
-    repair.updated_at = nowIso();
-    if (repair.current_status !== "closed") {
-      notify(
-        draft,
-        repair.customer_id,
-        repair.id,
-        "estimated_ready_changed",
-        estimatedReadyAt ? "Nueva fecha estimada" : "Fecha estimada retirada",
-        estimatedReadyAt
-          ? `Tu ${vehicleLabel(draft, repair.vehicle_id)} estará listo aproximadamente ${formatWhen(estimatedReadyAt)}.`
-          : `El taller te avisará cuando tenga una nueva fecha para tu ${vehicleLabel(draft, repair.vehicle_id)}.`,
-      );
-    }
-  });
+  await withLatency(() =>
+    transact((draft) => {
+      const repair = findRepair(draft, repairId);
+      requireStaff(draft, repair.workshop_id);
+      if (repair.estimated_ready_at === estimatedReadyAt) return;
+      repair.estimated_ready_at = estimatedReadyAt;
+      repair.updated_at = nowIso();
+      if (repair.current_status !== "closed") {
+        notify(
+          draft,
+          repair.customer_id,
+          repair.id,
+          "estimated_ready_changed",
+          estimatedReadyAt ? "Nueva fecha estimada" : "Fecha estimada retirada",
+          estimatedReadyAt
+            ? `Tu ${vehicleLabel(draft, repair.vehicle_id)} estará listo aproximadamente ${formatWhen(estimatedReadyAt)}.`
+            : `El taller te avisará cuando tenga una nueva fecha para tu ${vehicleLabel(draft, repair.vehicle_id)}.`,
+        );
+      }
+    }),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -741,43 +807,44 @@ export async function setEstimatedReadyAt(repairId: string, estimatedReadyAt: st
  * queden fuera del nuevo horario; se devuelve cuántas hay para avisar.
  */
 export async function saveWorkshopSchedule(workshopId: string, input: ScheduleInput): Promise<{ outside: number }> {
-  await delay();
-  return transact((draft) => {
-    requireStaff(draft, workshopId);
-    const errors = validateSchedule(input);
-    const first = Object.values(errors)[0];
-    if (first) throw new ActionError(first);
+  return withLatency(() =>
+    transact((draft) => {
+      requireStaff(draft, workshopId);
+      const errors = validateSchedule(input);
+      const first = Object.values(errors)[0];
+      if (first) throw new ActionError(first);
 
-    draft.db.workshop_availability = [
-      ...draft.db.workshop_availability.filter((r) => r.workshop_id !== workshopId),
-      ...input.days
-        .filter((d) => d.open)
-        .flatMap((d) =>
-          d.ranges.map((r) => ({
-            id: uuid(),
-            workshop_id: workshopId,
-            weekday: d.weekday,
-            start_time: r.start,
-            end_time: r.end,
-            slot_minutes: input.slot_minutes,
-            capacity: r.capacity,
-            is_active: true,
-          })),
-        ),
-    ];
+      draft.db.workshop_availability = [
+        ...draft.db.workshop_availability.filter((r) => r.workshop_id !== workshopId),
+        ...input.days
+          .filter((d) => d.open)
+          .flatMap((d) =>
+            d.ranges.map((r) => ({
+              id: uuid(),
+              workshop_id: workshopId,
+              weekday: d.weekday,
+              start_time: r.start,
+              end_time: r.end,
+              slot_minutes: input.slot_minutes,
+              capacity: r.capacity,
+              is_active: true,
+            })),
+          ),
+      ];
 
-    // Citas futuras que ya no encajan en el horario nuevo.
-    const now = Date.now();
-    const rows = draft.db.workshop_availability.filter((r) => r.workshop_id === workshopId);
-    const outside = draft.db.appointments.filter((a) => {
-      if (a.workshop_id !== workshopId || a.status === "cancelled" || a.status === "completed") return false;
-      const when = new Date(a.scheduled_at);
-      if (when.getTime() < now) return false;
-      const hhmm = `${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}`;
-      return !rows.some((r) => r.weekday === when.getDay() && r.start_time <= hhmm && hhmm < r.end_time);
-    }).length;
-    return { outside };
-  });
+      // Citas futuras que ya no encajan en el horario nuevo.
+      const now = Date.now();
+      const rows = draft.db.workshop_availability.filter((r) => r.workshop_id === workshopId);
+      const outside = draft.db.appointments.filter((a) => {
+        if (a.workshop_id !== workshopId || a.status === "cancelled" || a.status === "completed") return false;
+        const when = new Date(a.scheduled_at);
+        if (when.getTime() < now) return false;
+        const hhmm = `${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}`;
+        return !rows.some((r) => r.weekday === when.getDay() && r.start_time <= hhmm && hhmm < r.end_time);
+      }).length;
+      return { outside };
+    }),
+  );
 }
 
 /** Cierra un día concreto (festivo, vacaciones…). Devuelve las citas ya reservadas ese día. */
@@ -786,44 +853,102 @@ export async function addWorkshopClosure(
   date: string,
   reason: string,
 ): Promise<{ affected: number }> {
-  await delay();
-  return transact((draft) => {
-    requireStaff(draft, workshopId);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ActionError("Elige una fecha.");
-    const today = new Date();
-    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    if (date < todayKey) throw new ActionError("No puedes cerrar un día que ya ha pasado.");
-    if (draft.db.workshop_closures.some((c) => c.workshop_id === workshopId && c.date === date)) {
-      throw new ActionError("Ese día ya está marcado como cerrado.");
-    }
-    draft.db.workshop_closures.push({
-      id: uuid(),
-      workshop_id: workshopId,
-      date,
-      reason: reason.trim() || null,
-      created_at: nowIso(),
-    });
-    const affected = draft.db.appointments.filter(
-      (a) =>
-        a.workshop_id === workshopId &&
-        (a.status === "requested" || a.status === "confirmed") &&
-        localDateKey(a.scheduled_at) === date,
-    ).length;
-    return { affected };
-  });
+  return withLatency(() =>
+    transact((draft) => {
+      requireStaff(draft, workshopId);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ActionError("Elige una fecha.");
+      const today = new Date();
+      const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      if (date < todayKey) throw new ActionError("No puedes cerrar un día que ya ha pasado.");
+      if (draft.db.workshop_closures.some((c) => c.workshop_id === workshopId && c.date === date)) {
+        throw new ActionError("Ese día ya está marcado como cerrado.");
+      }
+      draft.db.workshop_closures.push({
+        id: uuid(),
+        workshop_id: workshopId,
+        date,
+        reason: reason.trim() || null,
+        created_at: nowIso(),
+      });
+      const affected = draft.db.appointments.filter(
+        (a) =>
+          a.workshop_id === workshopId &&
+          (a.status === "requested" || a.status === "confirmed") &&
+          localDateKey(a.scheduled_at) === date,
+      ).length;
+      return { affected };
+    }),
+  );
 }
 
 export async function removeWorkshopClosure(closureId: string): Promise<void> {
-  await delay();
-  transact((draft) => {
-    const closure = draft.db.workshop_closures.find((c) => c.id === closureId);
-    if (!closure) return;
-    requireStaff(draft, closure.workshop_id);
-    draft.db.workshop_closures = draft.db.workshop_closures.filter((c) => c.id !== closureId);
-  });
+  await withLatency(() =>
+    transact((draft) => {
+      const closure = draft.db.workshop_closures.find((c) => c.id === closureId);
+      if (!closure) return;
+      requireStaff(draft, closure.workshop_id);
+      draft.db.workshop_closures = draft.db.workshop_closures.filter((c) => c.id !== closureId);
+    }),
+  );
 }
 
 function localDateKey(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// ---------------------------------------------------------------------------
+// Solicitudes rechazadas por el taller: elegir otra fecha sin repetir todo
+// ---------------------------------------------------------------------------
+
+/**
+ * El cliente propone otra hora para una solicitud que el taller no pudo
+ * atender. Se reutiliza la misma solicitud (descripción, fotos…) y vuelve a
+ * quedar pendiente de confirmar.
+ */
+export async function rescheduleDeclinedAppointment(appointmentId: string, scheduledAt: string): Promise<void> {
+  await withLatency(() =>
+    transact((draft) => {
+      const appointment = draft.db.appointments.find((a) => a.id === appointmentId);
+      if (!appointment) throw new ActionError("No encontramos esta cita.");
+      const customer = requireCustomer(draft, appointment.customer_id);
+      if (appointment.status !== "cancelled" || appointment.cancelled_by !== "workshop") {
+        throw new ActionError("Esta cita ya no se puede reprogramar.");
+      }
+      const check = checkSlotBookable(
+        draft.db.workshop_availability.filter((a) => a.workshop_id === appointment.workshop_id),
+        draft.db.workshop_closures.filter((c) => c.workshop_id === appointment.workshop_id),
+        draft.db.appointments.filter((a) => a.workshop_id === appointment.workshop_id),
+        scheduledAt,
+      );
+      if (!check.ok) throw new SlotUnavailableError(check.reason);
+
+      appointment.status = "requested";
+      appointment.scheduled_at = scheduledAt;
+      appointment.cancelled_by = null;
+      appointment.cancellation_reason = null;
+      appointment.customer_dismissed_at = null;
+
+      notifyStaff(
+        draft,
+        appointment.workshop_id,
+        null,
+        "appointment_requested",
+        "Nueva hora propuesta",
+        `${customer.full_name} · ${vehicleLabel(draft, appointment.vehicle_id)} · ${formatDateTime(scheduledAt)}`,
+      );
+    }),
+  );
+}
+
+/** El cliente oculta el aviso de una solicitud rechazada. */
+export async function dismissDeclinedAppointment(appointmentId: string): Promise<void> {
+  await withLatency(() =>
+    transact((draft) => {
+      const appointment = draft.db.appointments.find((a) => a.id === appointmentId);
+      if (!appointment) return;
+      requireCustomer(draft, appointment.customer_id);
+      appointment.customer_dismissed_at = nowIso();
+    }),
+  );
 }

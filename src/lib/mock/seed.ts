@@ -28,13 +28,14 @@ import type { MockAuthUser, MockState, StorageObject } from "./types";
  * - Mañana (primer día laborable) a las 10:00 la franja está llena (2/2).
  * - El próximo sábado está completo (2 huecos, 2 citas).
  * - Un festivo dentro de ~9 días.
- * - Nuria: cliente recién registrada, sin coches (estados vacíos).
+ * - Nuria: cliente recién registrada, sin coches, con una consulta general.
+ * - Sergio: el taller rechazó su solicitud de cita (para probar "elegir otra fecha").
  */
 
 export const DEMO_PASSWORD = "demo1234";
 
 /** Súbelo cuando cambie la forma de los datos para regenerar el seed guardado. */
-export const MOCK_SCHEMA_VERSION = 2;
+export const MOCK_SCHEMA_VERSION = 3;
 
 /** uuid v4 válido y determinista: sid(2, 7) → 00000000-0000-4000-8002-000000000007 */
 function sid(table: number, n: number): string {
@@ -156,11 +157,12 @@ export function createSeed(now: Date = new Date()): MockState {
     polo: sid(3, 10),
     ibiza: sid(3, 11),
     i30: sid(3, 12),
+    mini: sid(3, 13),
   };
 
   const vehicles: Database["vehicles"] = [
-    { id: V.leon, customer_id: IDS.carlos, make: "Seat", model: "León", license_plate: "1234 ABC", year: 2019 },
-    { id: V.yaris, customer_id: IDS.carlos, make: "Toyota", model: "Yaris", license_plate: "5678 DEF", year: 2016 },
+    { id: V.leon, customer_id: IDS.carlos, make: "Seat", model: "León", license_plate: "1234 BBC", year: 2019 },
+    { id: V.yaris, customer_id: IDS.carlos, make: "Toyota", model: "Yaris", license_plate: "5678 DFG", year: 2016 },
     { id: V.clio, customer_id: IDS.ana, make: "Renault", model: "Clio", license_plate: "4321 JKL", year: 2020 },
     { id: V.c3, customer_id: IDS.ana, make: "Citroën", model: "C3", license_plate: "7531 KMN", year: 2018 },
     { id: V.p308, customer_id: IDS.marta, make: "Peugeot", model: "308", license_plate: "9876 GHF", year: 2017 },
@@ -171,7 +173,8 @@ export function createSeed(now: Date = new Date()): MockState {
     { id: V.bmw, customer_id: IDS.sergio, make: "BMW", model: "Serie 1", license_plate: "8642 TVW", year: 2019 },
     { id: V.a3, customer_id: IDS.jorge, make: "Audi", model: "A3", license_plate: "3698 BCD", year: 2018 },
     { id: V.polo, customer_id: IDS.jorge, make: "Volkswagen", model: "Polo", license_plate: "5566 FGH", year: 2017 },
-  ].map((v) => ({ ...v, workshop_id: W, vin: null, created_at: created }));
+    { id: V.mini, customer_id: IDS.sergio, make: "Mini", model: "Cooper", license_plate: "M 4521 XZ", year: 1998, plate_format: "es_old" },
+  ].map((v) => ({ plate_format: "es", ...v, workshop_id: W, vin: null, created_at: created }));
 
   // -------------------------------------------------------------------------
   // Citas
@@ -190,6 +193,7 @@ export function createSeed(now: Date = new Date()): MockState {
     polo: sid(4, 10),
     ibiza: sid(4, 11),
     i30: sid(4, 12),
+    miniDeclined: sid(4, 13),
   };
 
   const appt = (
@@ -212,6 +216,9 @@ export function createSeed(now: Date = new Date()): MockState {
     issue_category: category,
     issue_description: description,
     drivable_status: drivable,
+    cancelled_by: null,
+    cancellation_reason: null,
+    customer_dismissed_at: null,
     created_at: createdAt,
   });
 
@@ -242,6 +249,13 @@ export function createSeed(now: Date = new Date()): MockState {
       "Revisión antes de un viaje largo. Desde: Hoy.", "yes", at(-3, "16:00")),
     appt(A.ibiza, V.ibiza, IDS.marta, at(SAT, "09:30"), "confirmed", "otro",
       "Pasar la pre-ITV. Desde: Hoy.", "yes", at(-1, "18:30")),
+    // Solicitud que el taller no pudo atender: el cliente puede elegir otra hora
+    {
+      ...appt(A.miniDeclined, V.mini, IDS.sergio, at(T1, "16:00"), "cancelled", "averia",
+        "Pierde aceite por debajo del motor. Desde: Hace unos días.", "yes", ago(300)),
+      cancelled_by: "workshop" as const,
+      cancellation_reason: "Esa tarde no tenemos elevador libre. ¿Te viene bien otro día?",
+    },
   ];
 
   // -------------------------------------------------------------------------
@@ -319,7 +333,7 @@ export function createSeed(now: Date = new Date()): MockState {
     }
     const first = steps[0][1];
     const last = steps[steps.length - 1];
-    const completed = steps.find(([s]) => s === "repair_completed");
+    const completed = steps.find(([s]) => s === "ready_for_pickup");
     repair_orders.push({
       id,
       workshop_id: W,
@@ -356,8 +370,7 @@ export function createSeed(now: Date = new Date()): MockState {
     ["diagnosis", at(-3, "09:00"), J],
     ["estimate_pending", at(-3, "10:10"), L],
     ["repair_in_progress", at(-3, "12:00"), J],
-    ["repair_completed", ago(180), J],
-    ["ready_for_pickup", ago(150), L],
+    ["ready_for_pickup", ago(150), J],
   ], ESTIMATED.p308);
   repair(R.focus, A.focus, V.focus, IDS.david, [
     ["appointment_confirmed", at(-3, "20:40"), L],
@@ -380,7 +393,6 @@ export function createSeed(now: Date = new Date()): MockState {
     ["diagnosis", at(-2, "16:00"), P],
     ["estimate_pending", at(-2, "17:30"), L],
     ["repair_in_progress", at(-1, "09:00"), P],
-    ["repair_completed", ago(30), P],
   ], ESTIMATED.a3);
   repair(R.yarisOld, A.yarisOld, V.yaris, IDS.carlos, [
     ["appointment_confirmed", at(-38, "19:30"), L],
@@ -388,8 +400,7 @@ export function createSeed(now: Date = new Date()): MockState {
     ["diagnosis", at(-35, "09:30"), J],
     ["estimate_pending", at(-35, "10:00"), L],
     ["repair_in_progress", at(-35, "11:00"), J],
-    ["repair_completed", at(-35, "13:00"), J],
-    ["ready_for_pickup", at(-35, "13:05"), L],
+    ["ready_for_pickup", at(-35, "13:00"), J],
     ["closed", at(-35, "18:30"), L],
   ]);
   repair(R.polo, A.polo, V.polo, IDS.jorge, [["appointment_confirmed", at(-2, "12:30"), L]]);
@@ -482,9 +493,10 @@ export function createSeed(now: Date = new Date()): MockState {
   // -------------------------------------------------------------------------
 
   let msgN = 0;
-  const msg = (repairId: string, sender: string, body: string, createdAt: string, read: boolean): Message => ({
+  const msg = (repairId: string | null, sender: string, body: string, createdAt: string, read: boolean, customerId?: string): Message => ({
     id: sid(10, ++msgN),
     workshop_id: W,
+    customer_id: customerId ?? repair_orders.find((r) => r.id === repairId)?.customer_id ?? sender,
     repair_order_id: repairId,
     sender_id: sender,
     body,
@@ -501,6 +513,7 @@ export function createSeed(now: Date = new Date()): MockState {
     msg(R.clio, IDS.ana, "¡Genial, muchas gracias!", ago(70), false),
     msg(R.p308, L, "Marta, tu Peugeot ya está listo. Puedes pasar hasta las 13:00.", ago(150), true),
     msg(R.focus, IDS.david, "Me parece caro, prefiero pensarlo unos días.", ago(199), false),
+    msg(null, IDS.nuria, "Hola, ¿hacéis cambio de neumáticos? ¿Qué precio tiene más o menos?", ago(15), false, IDS.nuria),
   ];
 
   // -------------------------------------------------------------------------
@@ -532,7 +545,8 @@ export function createSeed(now: Date = new Date()): MockState {
     notif(IDS.carlos, R.leon, "status_changed", "Diagnóstico iniciado", "Estamos revisando tu Seat León.", at(-1, "10:30"), true),
     notif(IDS.carlos, R.leon, "estimate_sent", "Tienes un presupuesto", "Revisa el presupuesto de tu Seat León.", ago(40), false),
     notif(IDS.marta, R.p308, "status_changed", "¡Listo para recoger!", "Ya puedes pasar a recoger tu Peugeot 308.", ago(150), false),
-    notif(IDS.jorge, R.a3, "status_changed", "Reparación terminada", "La reparación de tu Audi A3 ha terminado.", ago(30), false),
+    notif(IDS.jorge, R.a3, "status_changed", "Reparación iniciada", "Hemos empezado a reparar tu Audi A3.", at(-1, "09:00"), true),
+    notif(IDS.sergio, null, "appointment_cancelled", "No podemos atenderte a esa hora", "Esa tarde no tenemos elevador libre. ¿Te viene bien otro día?", ago(240), false),
     ...staff.map((s) =>
       notif(s, R.focus, "estimate_rejected", "Presupuesto rechazado", "David Romero no quiere realizar la reparación · Ford Focus", ago(200), true),
     ),
@@ -541,6 +555,9 @@ export function createSeed(now: Date = new Date()): MockState {
     ),
     ...staff.map((s) =>
       notif(s, R.clio, "message", "Nuevo mensaje de Ana García", "¡Genial, muchas gracias!", ago(70), false),
+    ),
+    ...staff.map((s) =>
+      notif(s, null, "message", "Nueva consulta de Nuria Vidal", "Hola, ¿hacéis cambio de neumáticos? ¿Qué precio tiene más o menos?", ago(15), false),
     ),
   ];
 

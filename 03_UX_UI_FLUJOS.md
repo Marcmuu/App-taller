@@ -88,7 +88,6 @@ Cita confirmada
 → Diagnóstico
 → Presupuesto pendiente
 → Reparación iniciada
-→ Reparación terminada
 → Listo para recoger
 
 Mostrar:
@@ -216,7 +215,7 @@ estimate accepted
 → botón INICIAR REPARACIÓN
 
 repair_in_progress
-→ botón FINALIZAR REPARACIÓN
+→ botón TERMINADO · LISTO PARA RECOGER (un clic; el cliente recibe el aviso)
 
 repair_completed
 → botón LISTO PARA RECOGER

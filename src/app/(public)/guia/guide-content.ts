@@ -44,7 +44,11 @@ export const CUSTOMER_STEPS: GuideStep[] = [
   {
     id: "c-vehiculos",
     title: "Mis vehículos",
-    text: "Lista de coches del cliente con su matrícula. Desde aquí se añade un coche nuevo (matrícula, marca, modelo y año opcional) o se pide cita directamente para uno.",
+    text: "Lista de coches del cliente con su matrícula. Desde aquí se añade un coche nuevo o se pide cita directamente para uno.",
+    tips: [
+      "La matrícula se valida según el país: España (1234 BCD, sin vocales), España antigua (M 1234 AB), Portugal, Francia, Italia, Alemania u otro país.",
+      "No se puede registrar una matrícula que ya tiene otra cuenta.",
+    ],
     image: "c-vehiculos",
     frame: "phone",
   },
@@ -94,7 +98,7 @@ export const CUSTOMER_STEPS: GuideStep[] = [
     title: "Seguimiento de la reparación",
     text: "La pantalla principal del producto, como el seguimiento de un pedido: arriba el estado actual en grande, debajo la línea de tiempo con los 7 pasos y la hora de cada uno. Se actualiza sola, sin recargar.",
     tips: [
-      "Cita confirmada → Vehículo recibido → Diagnóstico → Presupuesto pendiente → Reparación iniciada → Reparación terminada → Listo para recoger.",
+      "Cita confirmada → Vehículo recibido → Diagnóstico → Presupuesto pendiente → Reparación iniciada → Listo para recoger.",
       "Cuando el taller da una fecha estimada, aparece «Listo aproximadamente: …» (orientativa; si cambia, llega un aviso).",
       "También muestra lo que el cliente contó al pedir la cita y sus fotos.",
     ],
@@ -126,7 +130,7 @@ export const CUSTOMER_STEPS: GuideStep[] = [
   {
     id: "c-mensajes",
     title: "Mensajes con el taller",
-    text: "Desde «Contactar con el taller». Es una conversación sencilla ligada a esa reparación, que además muestra los cambios de estado y los presupuestos en orden. También hay botón para llamar.",
+    text: "Icono de mensajes arriba (con contador): una consulta general con el taller, aunque no tengas ninguna reparación, y una conversación por cada reparación con sus cambios de estado y presupuestos. Responde cualquier persona del taller y ves «Visto» cuando han leído tu mensaje.",
     image: "c-mensajes",
     frame: "phone",
   },
@@ -139,8 +143,8 @@ export const CUSTOMER_STEPS: GuideStep[] = [
   },
   {
     id: "c-avisos",
-    title: "Avisos y perfil",
-    text: "La campana muestra los avisos (cita confirmada, presupuesto recibido, coche listo…). Además, cuando llega algo nuevo aparece un aviso emergente. En Perfil están los datos del cliente y del taller y «Cerrar sesión».",
+    title: "Avisos, cita rechazada y perfil",
+    text: "La campana muestra los avisos (cita confirmada, presupuesto recibido, coche listo…) y aparece un aviso emergente al llegar. Si el taller no puede atenderte a la hora pedida, en Inicio sale su motivo y el botón «Elegir otra fecha»: solo eliges la nueva hora, sin repetir la solicitud. En Perfil están tus datos, los del taller y «Escribir al taller».",
     image: "c-avisos",
     frame: "phone",
   },
@@ -200,7 +204,9 @@ export const WORKSHOP_STEPS: GuideStep[] = [
     title: "Ficha del vehículo",
     text: "Todo en una pantalla: estado, botón de siguiente acción, problema que contó el cliente con sus fotos, resumen del presupuesto, historial de estados (quién y cuándo), datos de contacto y la conversación.",
     tips: [
-      "Siguiente acción, un clic: MARCAR RECIBIDO → INICIAR DIAGNÓSTICO → CREAR PRESUPUESTO → (el cliente acepta) → INICIAR REPARACIÓN → FINALIZAR REPARACIÓN → LISTO PARA RECOGER → ENTREGAR Y CERRAR.",
+      "Siguiente acción, un clic: MARCAR RECIBIDO → INICIAR DIAGNÓSTICO → CREAR PRESUPUESTO → (el cliente acepta) → INICIAR REPARACIÓN → TERMINADO · LISTO PARA RECOGER → ENTREGADO AL CLIENTE.",
+      "Al terminar basta un clic: el coche pasa a «Listo para recoger» y el cliente recibe el aviso.",
+      "«Reparar sin presupuesto» (en diagnóstico) para trabajos ya acordados, como un mantenimiento a precio cerrado.",
       "Tras cada clic aparece «Deshacer» por si fue un error.",
       "«Entrega prevista»: la fecha orientativa que ve el cliente; se puede cambiar en cualquier momento (le llega un aviso).",
     ],
@@ -249,7 +255,7 @@ export const WORKSHOP_STEPS: GuideStep[] = [
   {
     id: "t-comunicaciones",
     title: "Comunicaciones",
-    text: "Todas las conversaciones, las más recientes primero, con buscador por cliente o matrícula y contador de mensajes sin leer. Cada conversación mezcla mensajes, cambios de estado y presupuestos.",
+    text: "Todas las conversaciones, las más recientes primero, con buscador y contador de no leídos: consultas generales de clientes (aunque no tengan coche en el taller) y la conversación de cada reparación. Todo el equipo ve y responde las mismas conversaciones.",
     image: "t-comunicaciones",
     frame: "desktop",
   },
@@ -267,10 +273,9 @@ export const STATUS_TABLE: Array<{ status: string; who: string; how: string }> =
   { status: "Vehículo recibido", who: "Taller", how: "«MARCAR RECIBIDO» cuando el cliente deja el coche." },
   { status: "Diagnóstico", who: "Taller", how: "«INICIAR DIAGNÓSTICO»." },
   { status: "Presupuesto pendiente", who: "Taller → Cliente", how: "El taller envía el presupuesto (con fecha estimada); el cliente acepta, rechaza o consulta. Si rechaza, el taller puede hacer otro o devolver el coche sin reparar." },
-  { status: "Reparación iniciada", who: "Taller", how: "«INICIAR REPARACIÓN» (solo si el cliente aceptó)." },
-  { status: "Reparación terminada", who: "Taller", how: "«FINALIZAR REPARACIÓN»." },
-  { status: "Listo para recoger", who: "Taller", how: "«LISTO PARA RECOGER»: el cliente recibe un aviso destacado." },
-  { status: "Entregado (cerrado)", who: "Taller", how: "«ENTREGAR Y CERRAR» cuando el cliente se lleva el coche." },
+  { status: "Reparación iniciada", who: "Taller", how: "«INICIAR REPARACIÓN» (si el cliente aceptó) o «Reparar sin presupuesto» si el trabajo ya estaba acordado." },
+  { status: "Listo para recoger", who: "Taller", how: "«TERMINADO · LISTO PARA RECOGER»: un solo clic y el cliente recibe el aviso." },
+  { status: "Entregado (cerrado)", who: "Taller", how: "«ENTREGADO AL CLIENTE» cuando se lo lleva (con «Deshacer» por si acaso)." },
 ];
 
 export const DEMO_ACCOUNTS = [

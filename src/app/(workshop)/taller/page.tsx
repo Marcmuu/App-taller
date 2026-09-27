@@ -22,7 +22,7 @@ const FILTERS: Array<{ key: string; label: string; match: (r: RepairView) => boo
   { key: "diagnosis", label: "Diagnóstico", match: inStatus("diagnosis") },
   // Los rechazados van aparte para que no abulten los pendientes.
   { key: "estimate", label: "Presupuesto", match: (r) => inStatus("estimate_pending")(r) && !isRejected(r) },
-  { key: "repair", label: "Reparación", match: inStatus("repair_in_progress", "repair_completed") },
+  { key: "repair", label: "Reparación", match: inStatus("repair_in_progress") },
   { key: "ready", label: "Listos", match: inStatus("ready_for_pickup") },
   { key: "rejected", label: "Rechazados", match: isRejected },
 ];

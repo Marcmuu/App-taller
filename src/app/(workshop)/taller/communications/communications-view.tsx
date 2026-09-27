@@ -3,20 +3,30 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, ExternalLink, MessagesSquare, Search } from "lucide-react";
+import { isToday } from "date-fns";
+import { ArrowLeft, ExternalLink, MessageCircleQuestion, MessagesSquare, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/shared/empty-state";
 import { CommunicationTimeline } from "@/components/repair/communication-timeline";
 import { StatusBadge } from "@/components/repair/status-badge";
 import { useData, useRequiredProfile } from "@/lib/data/hooks";
-import { getWorkshopConversations } from "@/lib/data/queries";
+import { getWorkshopConversations, type Conversation } from "@/lib/data/queries";
 import { formatDayLabel, formatTime, vehicleName } from "@/lib/format";
-import { cn } from "@/lib/utils";
-import { isToday } from "date-fns";
 import { routes } from "@/lib/routes";
+import { cn } from "@/lib/utils";
+
+function subtitle(c: Conversation): string {
+  return c.vehicle ? `${vehicleName(c.vehicle)} · ${c.vehicle.license_plate}` : "Consulta general";
+}
+
+function hrefFor(c: Conversation): string {
+  return c.thread.repairId ? routes.workshopConversation(c.thread.repairId) : routes.workshopGeneralConversation(c.thread.customerId);
+}
 
 export function CommunicationsView() {
-  const selectedId = useSearchParams().get("repair");
+  const params = useSearchParams();
+  const selectedRepair = params.get("repair");
+  const selectedCustomer = params.get("cliente");
   const profile = useRequiredProfile();
   const conversations = useData((s) => getWorkshopConversations(s.db, profile.workshop_id ?? ""));
   const [query, setQuery] = useState("");
@@ -24,10 +34,19 @@ export function CommunicationsView() {
   const q = query.trim().toLowerCase();
   const filtered = q
     ? conversations.filter((c) =>
-        [c.customer.full_name, c.vehicle.license_plate, vehicleName(c.vehicle)].some((t) => t.toLowerCase().includes(q)),
+        [c.customer.full_name, c.vehicle?.license_plate ?? "", c.vehicle ? vehicleName(c.vehicle) : "consulta general"].some((t) =>
+          t.toLowerCase().includes(q),
+        ),
       )
     : conversations;
-  const selected = conversations.find((c) => c.repair.id === selectedId) ?? null;
+  const selected =
+    conversations.find((c) =>
+      selectedRepair
+        ? c.thread.repairId === selectedRepair
+        : selectedCustomer
+          ? c.thread.repairId === null && c.thread.customerId === selectedCustomer
+          : false,
+    ) ?? null;
 
   return (
     <div className="space-y-4">
@@ -53,11 +72,11 @@ export function CommunicationsView() {
           ) : (
             <ul className="min-h-0 flex-1 divide-y overflow-y-auto">
               {filtered.map((c) => {
-                const active = c.repair.id === selectedId;
+                const active = c.key === selected?.key;
                 return (
-                  <li key={c.repair.id}>
+                  <li key={c.key}>
                     <Link
-                      href={routes.workshopConversation(c.repair.id)}
+                      href={hrefFor(c)}
                       scroll={false}
                       aria-current={active ? "true" : undefined}
                       className={cn("block space-y-1 px-4 py-3 hover:bg-muted/50", active && "bg-primary/5")}
@@ -67,11 +86,12 @@ export function CommunicationsView() {
                           {c.customer.full_name}
                         </p>
                         <span className="shrink-0 text-xs text-muted-foreground">
-                          {isToday(new Date(c.lastActivity)) ? formatTime(c.lastActivity) : formatDayLabel(c.lastActivity)}
+                          {c.lastActivity ? (isToday(new Date(c.lastActivity)) ? formatTime(c.lastActivity) : formatDayLabel(c.lastActivity)) : ""}
                         </span>
                       </div>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {vehicleName(c.vehicle)} · {c.vehicle.license_plate}
+                      <p className={cn("flex items-center gap-1 truncate text-xs", c.repair ? "text-muted-foreground" : "font-medium text-primary")}>
+                        {!c.repair && <MessageCircleQuestion className="size-3.5" aria-hidden />}
+                        {subtitle(c)}
                       </p>
                       <div className="flex items-center justify-between gap-2">
                         <p className={cn("truncate text-sm", c.unreadMessages > 0 ? "text-foreground" : "text-muted-foreground")}>
@@ -82,7 +102,7 @@ export function CommunicationsView() {
                             {c.unreadMessages}
                           </span>
                         ) : (
-                          <StatusBadge status={c.repair.current_status} className="shrink-0 px-2 py-0.5 text-[11px]" />
+                          c.repair && <StatusBadge status={c.repair.current_status} className="shrink-0 px-2 py-0.5 text-[11px]" />
                         )}
                       </div>
                     </Link>
@@ -93,7 +113,7 @@ export function CommunicationsView() {
           )}
         </section>
 
-        {/* Cronología */}
+        {/* Conversación */}
         <section className={cn("flex min-h-0 flex-col rounded-2xl border bg-card", !selected && "hidden lg:flex")}>
           {selected ? (
             <>
@@ -104,19 +124,23 @@ export function CommunicationsView() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{selected.customer.full_name}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {vehicleName(selected.vehicle)} · {selected.vehicle.license_plate}
+                    {subtitle(selected)} · {selected.customer.phone}
                   </p>
                 </div>
-                <StatusBadge status={selected.repair.current_status} className="hidden sm:inline-flex" />
-                <Link
-                  href={routes.workshopRepair(selected.repair.id)}
-                  className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-                >
-                  Ficha <ExternalLink className="size-3.5" aria-hidden />
-                </Link>
+                {selected.repair && (
+                  <>
+                    <StatusBadge status={selected.repair.current_status} className="hidden sm:inline-flex" />
+                    <Link
+                      href={routes.workshopRepair(selected.repair.id)}
+                      className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                    >
+                      Ficha <ExternalLink className="size-3.5" aria-hidden />
+                    </Link>
+                  </>
+                )}
               </header>
               <div data-scroll className="min-h-[60dvh] flex-1 overflow-y-auto px-4 pt-4 lg:min-h-0">
-                <CommunicationTimeline key={selected.repair.id} repairId={selected.repair.id} viewer="workshop" />
+                <CommunicationTimeline key={selected.key} thread={selected.thread} viewer="workshop" />
               </div>
             </>
           ) : (

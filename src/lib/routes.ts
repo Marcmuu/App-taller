@@ -15,6 +15,10 @@ export const routes = {
   workshopRepair: (repairId: string) => `/taller/vehicle?id=${repairId}`,
   workshopEstimate: (estimateId: string) => `/taller/estimate?id=${estimateId}`,
   workshopConversation: (repairId: string) => `/taller/communications?repair=${repairId}`,
+  workshopGeneralConversation: (customerId: string) => `/taller/communications?cliente=${customerId}`,
+  customerInbox: () => "/app/messages",
+  customerGeneralChat: () => "/app/messages/general",
+  customerReschedule: (appointmentId: string) => `/app/appointments/reschedule?id=${appointmentId}`,
 } as const;
 
 /**

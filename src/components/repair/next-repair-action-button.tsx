@@ -89,7 +89,7 @@ function ActionButton({
       }
       if (action.nextStatus) {
         const previous = repair.current_status;
-        await changeRepairStatus(repair.id, action.nextStatus, { note: action.note });
+        await changeRepairStatus(repair.id, action.nextStatus, { note: action.note, withoutEstimate: action.withoutEstimate });
         toast.success(REPAIR_STATUS_META[action.nextStatus].label, {
           action: {
             label: "Deshacer",

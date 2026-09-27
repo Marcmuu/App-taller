@@ -52,16 +52,18 @@ test.describe("Flujo de reparación", () => {
     await sergio.goto("/app");
     await expect(card(sergio, "BMW Serie 1")).toContainText("Reparación iniciada");
     await expect(card(sergio, "BMW Serie 1")).toContainText(/Listo aprox\.: .*hacia las 19:00/);
-    await staff.getByRole("button", { name: "FINALIZAR REPARACIÓN" }).click();
-    await staff.getByRole("button", { name: "LISTO PARA RECOGER" }).click();
+    // Terminar es un solo clic: el coche pasa a «Listo para recoger» y el cliente recibe el aviso
+    await staff.getByRole("button", { name: "TERMINADO · LISTO PARA RECOGER" }).click();
+    await expect(staff.getByRole("button", { name: "ENTREGADO AL CLIENTE" })).toBeVisible();
 
+    await expect(card(sergio, "BMW Serie 1")).toContainText("Listo para recoger");
     await card(sergio, "BMW Serie 1").getByRole("link", { name: "Ver recogida" }).click();
     await expect(sergio.getByText("Trabajos realizados")).toBeVisible();
     await expect(sergio.getByText("Filtro de habitáculo")).toBeVisible();
 
-    await staff.getByRole("button", { name: "ENTREGAR Y CERRAR" }).click();
-    await staff.getByRole("button", { name: "Confirmar" }).click();
-    await expect(staff.getByRole("button", { name: "ENTREGAR Y CERRAR" })).toBeHidden();
+    // Entregar también es un clic (sin diálogo), con «Deshacer» por si acaso
+    await staff.getByRole("button", { name: "ENTREGADO AL CLIENTE" }).click();
+    await expect(staff.getByRole("button", { name: "ENTREGADO AL CLIENTE" })).toBeHidden();
     await sergio.goto("/app");
     await expect(sergio.getByText("Historial")).toBeVisible();
     await expect(sergio.getByRole("link", { name: /BMW Serie 1.*Cerrado/ })).toBeVisible();
@@ -104,7 +106,7 @@ test.describe("Presupuestos: rechazos, consultas y versiones", () => {
     await expect(card(staff, "2468 LMN").getByRole("button", { name: "DEVOLVER SIN REPARAR" })).toBeVisible();
     await staff.getByRole("tab", { name: /^Presupuesto/ }).click();
     await expect(card(staff, "2468 LMN")).toHaveCount(0);
-    await expect(card(staff, "1234 ABC")).toBeVisible();
+    await expect(card(staff, "1234 BBC")).toBeVisible();
 
     const david = await page.context().newPage();
     await loginAs(david, "David Romero", "cliente");
@@ -137,13 +139,13 @@ test.describe("Presupuestos: rechazos, consultas y versiones", () => {
     await expect(carlos.getByText(/Has rechazado este presupuesto/)).toBeVisible();
 
     await staff.getByRole("tab", { name: /^Rechazados/ }).click();
-    const leon = card(staff, "1234 ABC");
+    const leon = card(staff, "1234 BBC");
     await expect(leon).toContainText("El cliente ha rechazado el presupuesto");
     await leon.getByRole("link").first().click();
     await expect(staff.getByText("Me lo arreglará un familiar.")).toBeVisible();
     await staff.getByRole("button", { name: "DEVOLVER SIN REPARAR" }).click();
     await staff.getByRole("button", { name: "Confirmar" }).click();
-    await expect(staff.getByRole("button", { name: "ENTREGAR Y CERRAR" })).toBeVisible();
+    await expect(staff.getByRole("button", { name: "ENTREGADO AL CLIENTE" })).toBeVisible();
     await expect(staff.getByText("Sin reparar: el cliente rechazó el presupuesto").first()).toBeVisible();
 
     // El cliente ya no puede aceptar y la recogida lo explica
@@ -172,7 +174,7 @@ test.describe("Presupuestos: rechazos, consultas y versiones", () => {
     const staff = await page.context().newPage();
     await loginAs(staff, "Laura Martínez", "taller");
     await staff.getByRole("tab", { name: /^Presupuesto/ }).click();
-    const leon = card(staff, "1234 ABC");
+    const leon = card(staff, "1234 BBC");
     await expect(leon).toContainText("El cliente tiene una consulta");
     await leon.getByRole("button", { name: "REVISAR PRESUPUESTO" }).click();
     await expect(staff.getByRole("heading", { name: /versión 2/ })).toBeVisible();
@@ -230,19 +232,19 @@ test.describe("Mensajes", () => {
     const staff = await page.context().newPage();
     await loginAs(staff, "Pablo Sánchez", "taller");
     const commsLink = staff.getByRole("link", { name: /Comunicaciones/ });
-    await expect(commsLink).toContainText("2"); // seed: mensajes sin leer de Ana y de David
+    await expect(commsLink).toContainText("3"); // seed: mensajes sin leer de Ana, David y Nuria
 
     await card(ana, "Renault Clio").getByRole("link").first().click();
     await ana.getByRole("link", { name: /Contactar con el taller/ }).click();
     await ana.getByLabel("Mensaje").fill("¿Puedo pasar a las 18:00?");
     await ana.getByLabel("Mensaje").press("Enter");
     await expect(ana.locator("p.whitespace-pre-wrap", { hasText: "¿Puedo pasar a las 18:00?" })).toBeVisible();
-    await expect(commsLink).toContainText("3");
+    await expect(commsLink).toContainText("4");
 
     await commsLink.click();
     await staff.getByRole("link", { name: /Ana García[\s\S]*Renault/ }).first().click();
     await expect(staff.locator("p.whitespace-pre-wrap", { hasText: "¿Puedo pasar a las 18:00?" })).toBeVisible();
-    await expect(commsLink).toContainText("1"); // queda el de David
+    await expect(commsLink).toContainText("2"); // quedan los de David y Nuria
     await staff.getByLabel("Mensaje").fill("Sí, te esperamos.");
     await staff.getByRole("button", { name: "Enviar" }).click();
 

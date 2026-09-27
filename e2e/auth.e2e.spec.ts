@@ -84,7 +84,7 @@ test.describe("Acceso", () => {
     await expect(page.getByText("Añade tu coche para empezar")).toBeVisible();
 
     await page.getByRole("link", { name: "Añadir vehículo" }).click();
-    await page.getByLabel("Matrícula").fill("9999zzz");
+    await page.getByLabel("Matrícula", { exact: true }).fill("9999zzz");
     await page.getByLabel("Marca").fill("Dacia");
     await page.getByLabel("Modelo").fill("Sandero");
     await page.getByLabel("Año (opcional)").fill("1800");

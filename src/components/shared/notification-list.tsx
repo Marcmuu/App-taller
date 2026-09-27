@@ -9,12 +9,13 @@ import { useData, useRequiredProfile } from "@/lib/data/hooks";
 import { getNotifications } from "@/lib/data/queries";
 import { formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import type { Notification } from "@/types/database";
 
 /**
  * Lista de avisos del usuario. Se marcan como leídos tras unos segundos en
  * pantalla, para que dé tiempo a ver cuáles eran nuevos.
  */
-export function NotificationList({ hrefFor }: { hrefFor: (repairId: string) => string }) {
+export function NotificationList({ hrefFor }: { hrefFor: (notification: Notification) => string | null }) {
   const profile = useRequiredProfile();
   const notifications = useData((s) => getNotifications(s.db, profile.id));
 
@@ -40,10 +41,11 @@ export function NotificationList({ hrefFor }: { hrefFor: (repairId: string) => s
             </div>
           </div>
         );
+        const href = hrefFor(n);
         return (
           <li key={n.id}>
-            {n.repair_order_id ? (
-              <Link href={hrefFor(n.repair_order_id)} className="block hover:bg-muted/40">
+            {href ? (
+              <Link href={href} className="block hover:bg-muted/40">
                 {content}
               </Link>
             ) : (

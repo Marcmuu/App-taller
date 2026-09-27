@@ -28,7 +28,7 @@ export function getCustomerRepairAction(view: RepairView): CustomerAction {
 }
 
 /** Estados en los que tiene sentido mostrar la fecha estimada de entrega. */
-const SHOW_ESTIMATED: RepairStatus[] = ["estimate_pending", "repair_in_progress", "repair_completed"];
+const SHOW_ESTIMATED: RepairStatus[] = ["estimate_pending", "repair_in_progress"];
 
 export function shouldShowEstimatedReady(view: RepairView): boolean {
   if (!view.repair.estimated_ready_at || !SHOW_ESTIMATED.includes(view.repair.current_status)) return false;

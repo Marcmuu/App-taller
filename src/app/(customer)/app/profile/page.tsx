@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { LogOut, Mail, MapPin, Phone } from "lucide-react";
+import Link from "next/link";
+import { LogOut, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
+import { routes } from "@/lib/routes";
 import { Button } from "@/components/ui/button";
 import { signOut } from "@/lib/data/actions";
 import { useData, useRequiredProfile } from "@/lib/data/hooks";
@@ -33,6 +35,9 @@ export default function ProfilePage() {
         <h2 className="text-sm font-medium text-muted-foreground">Tu taller</h2>
         <div className="divide-y rounded-2xl border bg-card">
           <p className="p-4 font-semibold">{workshop.name}</p>
+          <Link href={routes.customerGeneralChat()} className="flex items-center gap-3 p-4 font-medium text-primary hover:bg-muted/40">
+            <MessageCircle className="size-5" aria-hidden /> Escribir al taller
+          </Link>
           <a href={`tel:${workshop.phone.replace(/\s/g, "")}`} className="flex items-center gap-3 p-4 hover:bg-muted/40">
             <Phone className="size-5 text-muted-foreground" aria-hidden /> {workshop.phone}
           </a>

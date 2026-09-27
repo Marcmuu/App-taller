@@ -194,7 +194,7 @@ export default function WorkshopRepairDetailPage() {
           <section className="flex max-h-160 flex-col rounded-2xl border bg-card">
             <h2 className="border-b px-6 py-4 font-semibold">Comunicación</h2>
             <div data-scroll className="flex-1 overflow-y-auto px-4 pt-4">
-              <CommunicationTimeline repairId={repair.id} viewer="workshop" />
+              <CommunicationTimeline thread={{ customerId: repair.customer_id, repairId: repair.id }} viewer="workshop" />
             </div>
           </section>
         </aside>

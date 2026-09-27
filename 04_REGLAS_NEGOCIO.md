@@ -9,9 +9,10 @@ appointment_confirmed
 → diagnosis
 → estimate_pending
 → repair_in_progress
-→ repair_completed
 → ready_for_pickup
 → closed
+
+> Actualizado: `repair_completed` se unificó con `ready_for_pickup` para que terminar sea un solo clic. Desde `diagnosis` el taller puede pasar a `repair_in_progress` sin presupuesto (con confirmación) para trabajos ya acordados. Con un presupuesto rechazado puede enviar otra versión o devolver el coche sin reparar (`ready_for_pickup`).
 
 ## Automatizaciones de estado
 

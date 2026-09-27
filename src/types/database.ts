@@ -34,13 +34,16 @@ export type DrivableStatus = (typeof DRIVABLE_STATUSES)[number];
 export const MEDIA_TYPES = ["image", "video"] as const;
 export type MediaType = (typeof MEDIA_TYPES)[number];
 
+/**
+ * Estados de la reparación. "Reparación terminada" y "Listo para recoger" se
+ * unificaron: al finalizar, el coche pasa directamente a listo para recoger.
+ */
 export const REPAIR_STATUSES = [
   "appointment_confirmed",
   "vehicle_received",
   "diagnosis",
   "estimate_pending",
   "repair_in_progress",
-  "repair_completed",
   "ready_for_pickup",
   "closed",
 ] as const;
@@ -87,6 +90,8 @@ export interface Vehicle {
   customer_id: UUID;
   workshop_id: UUID | null;
   license_plate: string;
+  /** Formato/país de la matrícula (ver lib/domain/plates.ts): "es", "pt", "other"… */
+  plate_format: string;
   make: string;
   model: string;
   year: number | null;
@@ -104,6 +109,12 @@ export interface Appointment {
   issue_category: string | null;
   issue_description: string | null;
   drivable_status: DrivableStatus | null;
+  /** Quién anuló la cita (si status = cancelled). */
+  cancelled_by: "customer" | "workshop" | null;
+  /** Motivo que da el taller al rechazar la solicitud. */
+  cancellation_reason: string | null;
+  /** El cliente ocultó el aviso de "el taller no puede atenderte". */
+  customer_dismissed_at: ISODateTime | null;
   created_at: ISODateTime;
 }
 
@@ -171,10 +182,15 @@ export interface EstimateItem {
   sort_order: number;
 }
 
+/**
+ * Mensaje entre cliente y taller. La conversación es la del cliente con el
+ * taller; si repair_order_id es null es una consulta general (sin reparación).
+ */
 export interface Message {
   id: UUID;
   workshop_id: UUID;
-  repair_order_id: UUID;
+  customer_id: UUID;
+  repair_order_id: UUID | null;
   sender_id: UUID;
   body: string;
   created_at: ISODateTime;

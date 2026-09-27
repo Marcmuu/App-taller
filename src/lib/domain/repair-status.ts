@@ -57,16 +57,10 @@ export const REPAIR_STATUS_META: Record<RepairStatus, RepairStatusMeta> = {
     customerDescription: "Estamos reparando tu coche.",
     tone: "blue",
   },
-  repair_completed: {
-    label: "Reparación terminada",
-    shortLabel: "Terminada",
-    customerDescription: "La reparación ha terminado. Estamos preparando la entrega.",
-    tone: "emerald",
-  },
   ready_for_pickup: {
     label: "Listo para recoger",
     shortLabel: "Listo",
-    customerDescription: "Ya puedes pasar a recoger tu coche.",
+    customerDescription: "Hemos terminado. Ya puedes pasar a recoger tu coche.",
     tone: "green",
   },
   closed: {
@@ -84,7 +78,6 @@ export const CUSTOMER_TIMELINE_STEPS: RepairStatus[] = [
   "diagnosis",
   "estimate_pending",
   "repair_in_progress",
-  "repair_completed",
   "ready_for_pickup",
 ];
 
@@ -130,6 +123,8 @@ export interface RepairAction {
   hint?: string;
   /** Alternativa menos habitual que se muestra como botón secundario. */
   secondary?: RepairAction;
+  /** Permite empezar a reparar sin presupuesto aceptado (trabajos ya pactados). */
+  withoutEstimate?: boolean;
 }
 
 export function getNextRepairAction(
@@ -151,6 +146,16 @@ export function getNextRepairAction(
         type: "open_estimate",
         nextStatus: null,
         requiresConfirmation: false,
+        // Para trabajos ya pactados (mantenimiento a precio cerrado, garantía…).
+        secondary: {
+          ...transition("REPARAR SIN PRESUPUESTO", "repair_in_progress", {
+            requiresConfirmation: true,
+            note: "Reparación sin presupuesto (trabajo ya acordado con el cliente)",
+            confirmText:
+              "Úsalo solo si el cliente ya está de acuerdo con el trabajo y el precio (por ejemplo, un mantenimiento a precio cerrado o una garantía). El cliente verá que la reparación ha empezado.",
+          }),
+          withoutEstimate: true,
+        },
       };
 
     case "estimate_pending":
@@ -199,17 +204,16 @@ export function getNextRepairAction(
         hint: "Presupuesto enviado, pendiente de respuesta",
       };
 
+    // Un solo clic al terminar: el coche pasa directamente a "Listo para
+    // recoger" y el cliente recibe el aviso.
     case "repair_in_progress":
-      return transition("FINALIZAR REPARACIÓN", "repair_completed");
-
-    case "repair_completed":
-      return transition("LISTO PARA RECOGER", "ready_for_pickup");
-
-    case "ready_for_pickup":
-      return transition("ENTREGAR Y CERRAR", "closed", {
-        requiresConfirmation: true,
-        confirmText: "Confirma que el cliente ha recogido el vehículo. La reparación se cerrará y pasará al historial.",
+      return transition("TERMINADO · LISTO PARA RECOGER", "ready_for_pickup", {
+        hint: "Al pulsar, el cliente recibe el aviso para venir a recogerlo",
       });
+
+    // Sin diálogo de confirmación: el aviso con "Deshacer" basta.
+    case "ready_for_pickup":
+      return transition("ENTREGADO AL CLIENTE", "closed");
 
     case "closed":
       return {
@@ -291,8 +295,6 @@ export function customerNotificationForStatus(
       return { title: "Diagnóstico iniciado", body: `Estamos revisando tu ${vehicleName}.` };
     case "repair_in_progress":
       return { title: "Reparación iniciada", body: `Hemos empezado a reparar tu ${vehicleName}.` };
-    case "repair_completed":
-      return { title: "Reparación terminada", body: `La reparación de tu ${vehicleName} ha terminado.` };
     case "ready_for_pickup":
       return { title: "¡Listo para recoger!", body: `Ya puedes pasar a recoger tu ${vehicleName}.` };
     case "estimate_pending":

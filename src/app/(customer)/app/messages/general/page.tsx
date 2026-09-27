@@ -1,24 +1,22 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
 import { Phone } from "lucide-react";
 import { BackHeader } from "@/components/customer/back-header";
 import { CommunicationTimeline } from "@/components/repair/communication-timeline";
 import { useData, useRequiredProfile } from "@/lib/data/hooks";
-import { getDefaultWorkshop, getRepairView } from "@/lib/data/queries";
+import { getDefaultWorkshop } from "@/lib/data/queries";
 import { routes } from "@/lib/routes";
 
-export default function CustomerMessagesPage() {
-  const id = useSearchParams().get("id") ?? "";
+/** Consulta general con el taller, sin necesidad de tener una reparación abierta. */
+export default function CustomerGeneralChatPage() {
   const profile = useRequiredProfile();
   const workshop = useData((s) => getDefaultWorkshop(s.db));
-  const allowed = useData((s) => getRepairView(s.db, id, false)?.repair.customer_id === profile.id);
 
   return (
     <div className="flex min-h-dvh flex-col">
       <BackHeader
-        title={workshop.name}
-        href={routes.customerRepair(id)}
+        title={`${workshop.name} · Consulta`}
+        href={routes.customerInbox()}
         right={
           <a
             href={`tel:${workshop.phone.replace(/\s/g, "")}`}
@@ -29,11 +27,7 @@ export default function CustomerMessagesPage() {
           </a>
         }
       />
-      {allowed ? (
-        <CommunicationTimeline thread={{ customerId: profile.id, repairId: id }} viewer="customer" className="flex-1" />
-      ) : (
-        <p className="py-10 text-center text-muted-foreground">No encontramos esta conversación.</p>
-      )}
+      <CommunicationTimeline thread={{ customerId: profile.id, repairId: null }} viewer="customer" className="flex-1" />
     </div>
   );
 }
