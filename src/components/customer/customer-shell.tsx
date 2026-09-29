@@ -7,6 +7,7 @@ import { Bell, CarFront, House, MessageCircle, UserRound } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { AuthGuard, DataGate, FullPageLoader } from "@/components/shared/guards";
 import { DemoSwitcher } from "@/components/shared/demo-switcher";
+import { InstallAppBanner } from "@/components/shared/install-app";
 import { LiveNotifier } from "@/components/shared/live-notifier";
 import { useData, useRequiredProfile } from "@/lib/data/hooks";
 import { countAllUnread, getDefaultWorkshop } from "@/lib/data/queries";
@@ -35,6 +36,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
 function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname().replace(/(.)\/$/, "$1"); // sin barra final (trailingSlash)
   const topLevel = TOP_LEVEL.has(pathname);
+  const workshop = useData((s) => getDefaultWorkshop(s.db));
 
   return (
     <div className="flex min-h-dvh flex-col bg-muted/40">
@@ -44,6 +46,8 @@ function Shell({ children }: { children: React.ReactNode }) {
         <Suspense fallback={<FullPageLoader />}>{children}</Suspense>
       </main>
       {topLevel && <BottomNav pathname={pathname} />}
+      {/* Solo en pantallas principales: en las demás taparía los botones de abajo */}
+      {topLevel && <InstallAppBanner workshopName={workshop.name} className="bottom-[calc(4.75rem+env(safe-area-inset-bottom))]" />}
     </div>
   );
 }

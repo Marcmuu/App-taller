@@ -14,7 +14,8 @@ import type {
   SignupInput,
   VehicleInput,
 } from "@/lib/validators";
-import type { EstimateResponse, MediaUpload, WorkshopProfileInput } from "../mock-actions";
+import type { EstimateResponse, MediaUpload, PushSubscriptionInput, WorkshopProfileInput } from "../mock-actions";
+import { currentPushSubscription } from "@/lib/pwa";
 import { MEDIA_BUCKET, getSessionUserId, getState, refreshTables, reloadAll, waitForProfile } from "./store";
 
 /**
@@ -65,6 +66,9 @@ export async function signIn(email: string, password: string): Promise<Profile> 
 }
 
 export async function signOut() {
+  // Este dispositivo deja de recibir los avisos de esta cuenta
+  const subscription = await currentPushSubscription().catch(() => null);
+  if (subscription) await deletePushSubscription(subscription.endpoint).catch(() => undefined);
   await getSupabase().auth.signOut();
 }
 
@@ -281,6 +285,25 @@ export async function updateWorkshopProfile(workshopId: string, input: WorkshopP
     },
     ["workshops"],
   );
+}
+
+// ---------------------------------------------------------------------------
+// Avisos en el móvil (Web Push)
+// ---------------------------------------------------------------------------
+
+export async function savePushSubscription(input: PushSubscriptionInput): Promise<void> {
+  const { error } = await getSupabase().rpc("save_push_subscription", {
+    p_endpoint: input.endpoint,
+    p_p256dh: input.p256dh,
+    p_auth: input.auth,
+    p_user_agent: input.userAgent ?? "",
+  });
+  if (error) throw toActionError(error);
+}
+
+export async function deletePushSubscription(endpoint: string): Promise<void> {
+  const { error } = await getSupabase().rpc("delete_push_subscription", { p_endpoint: endpoint });
+  if (error) throw toActionError(error);
 }
 
 // ---------------------------------------------------------------------------

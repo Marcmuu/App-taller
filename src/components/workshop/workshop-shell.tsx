@@ -16,12 +16,13 @@ import {
 import { AuthGuard, DataGate, FullPageLoader } from "@/components/shared/guards";
 import { DemoSwitcher } from "@/components/shared/demo-switcher";
 import { LiveNotifier } from "@/components/shared/live-notifier";
+import { usePushMenuItem } from "@/components/shared/push-settings";
 import { markNotificationsRead, signOut } from "@/lib/data/actions";
 import { useData, useRequiredProfile } from "@/lib/data/hooks";
 import { getNotifications, getWorkshop } from "@/lib/data/queries";
 import { formatRelative, initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { routes } from "@/lib/routes";
+import { workshopNotificationHref } from "@/lib/notification-links";
 
 export function WorkshopShell({ children }: { children: React.ReactNode }) {
   return (
@@ -118,7 +119,7 @@ function NotificationsMenu() {
         {notifications.length === 0 && <p className="px-2 py-6 text-center text-sm text-muted-foreground">Sin avisos</p>}
         {notifications.map((n) => (
           <DropdownMenuItem key={n.id} asChild className="items-start">
-            <Link href={n.repair_order_id ? routes.workshopRepair(n.repair_order_id) : n.type === "message" ? "/taller/communications" : "/taller"}>
+            <Link href={workshopNotificationHref(n)}>
               <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", n.read_at ? "bg-transparent" : "bg-primary")} aria-hidden />
               <span className="min-w-0">
                 <span className={cn("block text-sm", !n.read_at && "font-semibold")}>{n.title}</span>
@@ -136,6 +137,7 @@ function NotificationsMenu() {
 function UserMenu() {
   const router = useRouter();
   const profile = useRequiredProfile();
+  const pushItem = usePushMenuItem();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -162,6 +164,11 @@ function UserMenu() {
             <QrCode aria-hidden /> Tarjetas QR
           </Link>
         </DropdownMenuItem>
+        {pushItem && (
+          <DropdownMenuItem disabled={pushItem.disabled} onSelect={() => void pushItem.run()}>
+            <pushItem.icon aria-hidden /> {pushItem.label}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={async () => {

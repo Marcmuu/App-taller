@@ -118,7 +118,15 @@ Horario del taller, dirección con «Cómo llegar», **trabajos realizados y tot
 
 ### 3.9 Avisos y perfil
 - **Campana**: cita confirmada o rechazada (con «Elegir otra fecha»), coche recibido, diagnóstico, presupuesto, reparación iniciada/terminada, listo para recoger, **nueva fecha estimada** y mensajes. Además aparece un aviso emergente al llegar.
-- **Perfil**: tus datos, los del taller y cerrar sesión.
+- **Perfil**: tus datos, los del taller, **En tu móvil** (añadir a la pantalla de inicio y activar los avisos del móvil) y cerrar sesión.
+
+### 3.10 La app en el móvil
+- Al entrar desde el móvil aparece un aviso para **añadir la web a la pantalla de inicio**: se abre desde un icono, a pantalla completa, como una app. No se descarga nada: es un acceso directo y apenas ocupa espacio.
+  - **Android**: botón «Añadir a pantalla de inicio».
+  - **iPhone**: Compartir → «Añadir a pantalla de inicio» (el aviso lo explica).
+  - Se puede cerrar; no vuelve a salir en una semana.
+- Abierta desde el icono, ofrece **activar los avisos del móvil**: llegan como notificación del teléfono aunque la app esté cerrada, y al tocarlos se abre la pantalla correspondiente.
+- El taller los activa en su menú de usuario → «Activar avisos en este dispositivo».
 
 ---
 

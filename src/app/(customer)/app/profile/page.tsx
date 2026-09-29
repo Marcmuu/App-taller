@@ -5,6 +5,7 @@ import Link from "next/link";
 import { LogOut, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { routes } from "@/lib/routes";
 import { Button } from "@/components/ui/button";
+import { AppOnPhoneSection } from "@/components/shared/push-settings";
 import { signOut } from "@/lib/data/actions";
 import { useData, useRequiredProfile } from "@/lib/data/hooks";
 import { getDefaultWorkshop } from "@/lib/data/queries";
@@ -49,6 +50,8 @@ export default function ProfilePage() {
           </p>
         </div>
       </section>
+
+      <AppOnPhoneSection />
 
       <Button
         variant="outline"

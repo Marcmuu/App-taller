@@ -156,6 +156,17 @@ export const CUSTOMER_STEPS: GuideStep[] = [
     frame: "phone",
   },
   {
+    id: "c-movil",
+    title: "La app en tu móvil",
+    text: "Al entrar desde el móvil se ofrece añadir la web a la pantalla de inicio: se abre desde un icono, a pantalla completa, como una app. No se descarga nada (es un acceso directo y apenas ocupa espacio). En Android basta un botón; en iPhone el aviso explica los dos toques en Safari.",
+    tips: [
+      "Abierta desde el icono, ofrece activar los avisos del móvil: llegan como notificación del teléfono aunque la app esté cerrada.",
+      "Se activan o desactivan en Perfil → En tu móvil. En iPhone hace falta iOS 16.4 o superior.",
+    ],
+    image: "c-movil",
+    frame: "phone",
+  },
+  {
     id: "c-propuesta",
     title: "El taller te propone otra hora",
     text: "Si el taller no puede a la hora que pediste, puede proponerte otra. En Inicio sale su mensaje y la hora propuesta: «Aceptar esta hora» y la cita queda confirmada con un toque. Si no te viene bien, «Prefiero elegir otra fecha». Una cita ya confirmada también se puede mover con «Cambiar fecha» desde el seguimiento.",

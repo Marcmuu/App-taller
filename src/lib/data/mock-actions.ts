@@ -1114,6 +1114,25 @@ export async function updateWorkshopProfile(workshopId: string, input: WorkshopP
 }
 
 // ---------------------------------------------------------------------------
+// Avisos en el móvil (Web Push)
+// ---------------------------------------------------------------------------
+
+export type PushSubscriptionInput = { endpoint: string; p256dh: string; auth: string; userAgent?: string };
+
+/**
+ * La demo no tiene servidor que envíe avisos con la app cerrada: basta con el
+ * permiso del navegador y se muestran mientras la app está abierta o en segundo
+ * plano (LiveNotifier). Con Supabase se guarda la suscripción.
+ */
+export async function savePushSubscription(input: PushSubscriptionInput): Promise<void> {
+  void input;
+}
+
+export async function deletePushSubscription(endpoint: string): Promise<void> {
+  void endpoint;
+}
+
+// ---------------------------------------------------------------------------
 // Demo
 // ---------------------------------------------------------------------------
 

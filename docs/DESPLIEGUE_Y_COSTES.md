@@ -79,11 +79,38 @@ Tiempo aproximado: 20 minutos. Solo tienes que crear las cuentas; el resto son c
    | `NEXT_PUBLIC_SUPABASE_URL` | `https://<ref>.supabase.co` |
    | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | la publishable key |
    | `NEXT_PUBLIC_DEMO_MODE` | `true` |
+   | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | la clave pública de los avisos del móvil (paso 2.3) |
 
    **No** añadas la secret key: la web no la necesita. Si alguien la consigue, se salta toda la seguridad.
 3. Pulsa **Deploy**. Cada `git push` a `main` vuelve a publicar la web solo.
 
 Ya puedes abrir la URL en dos móviles, entrar con cuentas distintas y hablar por el chat.
+
+### 2.3 Avisos en el móvil (notificaciones push)
+
+Con la app añadida a la pantalla de inicio, los avisos (coche listo, presupuesto, mensajes…) llegan como notificación del móvil **aunque la app esté cerrada**. Gratis: los envían Apple y Google.
+
+1. Genera las claves (una vez por proyecto):
+
+   ```bash
+   npm run db:demo -- push-keys
+   ```
+
+2. Pon la clave pública en Vercel (`NEXT_PUBLIC_VAPID_PUBLIC_KEY`, tabla de arriba) y los secretos en Supabase:
+
+   ```bash
+   npx supabase secrets set VAPID_PUBLIC_KEY=… VAPID_PRIVATE_KEY=… VAPID_SUBJECT=mailto:tu@email PUSH_WEBHOOK_SECRET=…
+   npx supabase functions deploy send-push --no-verify-jwt
+   npx tsx --env-file=.env.production.local scripts/db-admin.ts push-setup https://<ref>.supabase.co/functions/v1/send-push <PUSH_WEBHOOK_SECRET>
+   ```
+
+Cómo funciona: cada aviso nuevo (tabla `notifications`) dispara un trigger que llama a la función `send-push` (`supabase/functions/send-push`), y esta lo envía a cada móvil que el usuario tenga activado. Sin configurar, la app funciona igual y los avisos solo salen dentro de la app.
+
+- **iPhone**: necesita iOS 16.4 o superior y la app **añadida a la pantalla de inicio** (en Safari normal Apple no permite avisos).
+- **Android / ordenador**: funciona también desde el navegador.
+- Al cerrar sesión, ese móvil deja de recibir los avisos de esa cuenta.
+
+En local ya viene preparado: las claves de prueba van en `supabase/functions/.env` y `.env.local`, y se configura con `npm run db:demo -- push-setup http://supabase_kong_app-taller:8000/functions/v1/send-push <secreto>`.
 
 > **Aviso sobre la demo gratuita:** Supabase pausa los proyectos gratis tras 7 días sin uso. Se reactiva con un clic en el panel. Las fechas de los datos demo son relativas al día de carga: si pasan semanas, pulsa **Demo → Reiniciar datos**.
 
@@ -211,5 +238,6 @@ npm run test:db                       # seguridad RLS
 
 # Nube (con .env.production.local)
 npx supabase db push                  # aplica migraciones nuevas
-npx tsx --env-file=.env.production.local scripts/db-admin.ts reset|purge|create-workshop ...
+npx tsx --env-file=.env.production.local scripts/db-admin.ts reset|purge|create-workshop|push-keys|push-setup ...
+npx supabase functions deploy send-push --no-verify-jwt   # tras cambiar la función de avisos
 ```

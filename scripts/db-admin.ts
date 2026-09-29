@@ -6,11 +6,14 @@
  *   npm run db:demo -- purge            Borra TODO lo demo (usuarios, taller, fotos) y desactiva el modo demo
  *   npm run db:demo -- create-workshop "Taller Pérez" admin@tallerperez.es "Ana Pérez" [+34 600 000 000]
  *                                       Crea el taller real y su administrador (imprime una contraseña temporal)
+ *   npm run db:demo -- push-keys        Genera las claves de los avisos del móvil (VAPID) y el secreto del trigger
+ *   npm run db:demo -- push-setup <url de la función send-push> <secreto>
+ *                                       Le dice a la base de datos adónde enviar cada aviso
  *
  * Lee NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY de .env.local
  * (o de las variables de entorno).
  */
-import { randomBytes } from "node:crypto";
+import { createECDH, randomBytes } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createSeed, IDS } from "@/lib/mock/seed";
 
@@ -96,6 +99,31 @@ async function createWorkshop(name: string, email: string, adminName: string, ph
   console.log(`Contraseña temporal: ${password}   ← cámbiala al entrar\n`);
 }
 
+/** Claves VAPID (P-256) en el formato de web-push, y un secreto para el trigger. */
+function pushKeys() {
+  const ecdh = createECDH("prime256v1");
+  ecdh.generateKeys();
+  const publicKey = ecdh.getPublicKey().toString("base64url");
+  const privateKey = ecdh.getPrivateKey().toString("base64url");
+  const secret = randomBytes(32).toString("base64url");
+  console.log("\n# 1) En .env.local y en Vercel (la clave pública no es secreta):");
+  console.log(`NEXT_PUBLIC_VAPID_PUBLIC_KEY=${publicKey}`);
+  console.log("\n# 2) Secretos de la función send-push (local: supabase/functions/.env · nube: npx supabase secrets set …):");
+  console.log(`VAPID_PUBLIC_KEY=${publicKey}`);
+  console.log(`VAPID_PRIVATE_KEY=${privateKey}`);
+  console.log("VAPID_SUBJECT=mailto:tu-email@tutaller.es");
+  console.log(`PUSH_WEBHOOK_SECRET=${secret}`);
+  console.log("\n# 3) Y en la base de datos:");
+  console.log(`npm run db:demo -- push-setup https://<proyecto>.supabase.co/functions/v1/send-push ${secret}\n`);
+}
+
+async function pushSetup(functionUrl: string, secret: string) {
+  if (!/^https?:\/\//.test(functionUrl)) throw new Error("La URL de la función debe empezar por http(s)://");
+  const { error } = await adminClient().rpc("configure_push", { p_function_url: functionUrl, p_secret: secret });
+  if (error) throw error;
+  console.log("Avisos del móvil configurados.");
+}
+
 async function main() {
   const [command, ...args] = process.argv.slice(2);
   switch (command) {
@@ -111,8 +139,15 @@ async function main() {
       if (args.length < 3) throw new Error('Uso: create-workshop "Nombre" email "Nombre del administrador" [teléfono]');
       await createWorkshop(args[0], args[1], args[2], args[3]);
       break;
+    case "push-keys":
+      pushKeys();
+      break;
+    case "push-setup":
+      if (args.length < 2) throw new Error("Uso: push-setup <url de send-push> <secreto>");
+      await pushSetup(args[0], args[1]);
+      break;
     default:
-      console.log("Comandos: reset | purge | create-workshop");
+      console.log("Comandos: reset | purge | create-workshop | push-keys | push-setup");
   }
 }
 

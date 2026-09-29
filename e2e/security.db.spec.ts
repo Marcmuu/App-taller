@@ -128,3 +128,31 @@ test("el taller ve todo lo de su taller; un mecánico no cambia los datos del ta
   });
   expect(ws.error?.message).toMatch(/Solo el administrador/);
 });
+
+test("avisos del móvil: cada uno solo gestiona sus dispositivos", async () => {
+  const endpoint = (who: string) => `https://push.example.com/${who}-${Date.now()}`;
+  const ana = await as("ana@demo.es");
+  const carlos = await as("carlos@demo.es");
+  const anaEndpoint = endpoint("ana");
+  const sub = { p_endpoint: anaEndpoint, p_p256dh: "BPk", p_auth: "au" };
+  expect((await ana.rpc("save_push_subscription", sub)).error).toBeNull();
+
+  // Carlos no ve la suscripción de Ana ni puede borrarla
+  expect(await rows(carlos, "push_subscriptions")).toHaveLength(0);
+  expect((await carlos.rpc("delete_push_subscription", { p_endpoint: anaEndpoint })).error).toBeNull();
+  expect(await rows(ana, "push_subscriptions")).toHaveLength(1);
+
+  // Sin sesión no se guarda nada y las direcciones que no son https se rechazan
+  expect((await client().rpc("save_push_subscription", sub)).error).not.toBeNull();
+  expect((await ana.rpc("save_push_subscription", { ...sub, p_endpoint: "http://intranet/x" })).error).not.toBeNull();
+  // Nadie desde la app puede cambiar adónde se envían los avisos
+  expect((await ana.rpc("configure_push", { p_function_url: "https://malo.example", p_secret: "x" })).error).not.toBeNull();
+  expect((await ana.from("push_subscriptions").insert({ user_id: IDS.ana, endpoint: endpoint("x"), p256dh: "a", auth: "b" })).error).not.toBeNull();
+
+  // Si en el mismo móvil entra Carlos, el dispositivo pasa a ser suyo
+  expect((await carlos.rpc("save_push_subscription", sub)).error).toBeNull();
+  expect(await rows(ana, "push_subscriptions")).toHaveLength(0);
+  expect(await rows(carlos, "push_subscriptions")).toHaveLength(1);
+  expect((await carlos.rpc("delete_push_subscription", { p_endpoint: anaEndpoint })).error).toBeNull();
+  expect(await rows(carlos, "push_subscriptions")).toHaveLength(0);
+});

@@ -10,7 +10,7 @@ import { BACKEND } from "./backend";
  */
 
 export { ActionError, SlotUnavailableError } from "./errors";
-export type { EstimateResponse, MediaUpload, WorkshopProfileInput } from "./mock-actions";
+export type { EstimateResponse, MediaUpload, PushSubscriptionInput, WorkshopProfileInput } from "./mock-actions";
 
 type Mock = typeof mock;
 type ActionName = Exclude<keyof Mock, "ActionError" | "SlotUnavailableError">;
@@ -48,5 +48,7 @@ export const saveWorkshopSchedule = (...a: Parameters<Mock["saveWorkshopSchedule
 export const addWorkshopClosure = (...a: Parameters<Mock["addWorkshopClosure"]>) => impl.addWorkshopClosure(...a);
 export const removeWorkshopClosure = (...a: Parameters<Mock["removeWorkshopClosure"]>) => impl.removeWorkshopClosure(...a);
 export const updateWorkshopProfile = (...a: Parameters<Mock["updateWorkshopProfile"]>) => impl.updateWorkshopProfile(...a);
+export const savePushSubscription = (...a: Parameters<Mock["savePushSubscription"]>) => impl.savePushSubscription(...a);
+export const deletePushSubscription = (...a: Parameters<Mock["deletePushSubscription"]>) => impl.deletePushSubscription(...a);
 export const switchDemoUser = (...a: Parameters<Mock["switchDemoUser"]>) => impl.switchDemoUser(...a);
 export const resetDemoData = (...a: Parameters<Mock["resetDemoData"]>) => impl.resetDemoData(...a);
